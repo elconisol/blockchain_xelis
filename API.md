@@ -101,7 +101,11 @@ When a block was previously executed in the DAG but due to DAG reorg, got rewind
 
 ##### Name `block_orphaned`
 
-##### On Event
+##### On Event1
+```json
+
+```
+##### On Event2
 ```json
 
 ```
