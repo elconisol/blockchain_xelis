@@ -43,7 +43,7 @@ This is useful to determine which kind of event it is. You must set a unique `id
 
 When a new block has been accepted and included in the chain by the daemon.
 
-##### Name `new_block`
+
 
 ##### On Event
 ```json
