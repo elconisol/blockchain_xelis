@@ -7,18 +7,25 @@ authors = ["Slixe <slixeprivate@gmail.com>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# Local crate
 xelis_common = { path = "../xelis_common", features = ["prompt", "clap"] }
+
+# CLI
 clap = { version = "4.5.2", features = ["derive"] }
+
+# Async/WebSocket
+tokio = { version = "1", features = ["rt"] }
 tokio-tungstenite = { version = "0.21", features = ["rustls-tls-native-roots"] }
 futures-util = "0.3.30"
-lazy_static = "1.4.0"
 
-# Common dependencies
-log = "0.4"
+# Serialization
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt"] }
+
+# Utilities
 anyhow = "1"
+lazy_static = "1.4.0"
+log = "0.4"
 rand = "0.8.4"
 
 [features]
