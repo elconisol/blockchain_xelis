@@ -5,70 +5,71 @@ edition = "2021"
 authors = ["Slixe <slixeprivate@gmail.com>"]
 build = "build.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# See more at: https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# Core dependencies
+anyhow = "1"
+async-trait = "0.1.77"
 blake3 = "1.5.1"
+chacha20 = "0.9.1"
+chacha20poly1305 = "0.10.1"
+chrono = { version = "0.4.35", optional = true }
 hex = "0.4.3"
+indexmap = { version = "2.7.0", features = ["serde"] }
+lazy_static = "1.4.0"
+log = "0.4"
+log-panics = { version = "2", features = ["with-backtrace"] }
+rand = "0.8.5"
+regex = "1"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
-rand = "0.8.5"
+serde_regex = "1.1.0"
+thiserror = "1"
+zeroize = "1.7.0"
+cfg-if = "1.0.0"
+
+# Cryptographic and ZKP dependencies
 bulletproofs = { git = "https://github.com/xelis-project/bulletproofs", branch = "master", version = "5.0.2" }
 curve25519-dalek = { version = "4.1.1", features = ["digest", "group", "rand_core", "serde", "ecdlp"], git = "https://github.com/xelis-project/curve25519-dalek", branch = "master" }
 merlin = "3.0.0"
-zeroize = "1.7.0"
-lazy_static = "1.4.0"
-sha3 = "0.10.8"
-chacha20poly1305 = "0.10.1"
-xelis-hash = { git = "https://github.com/xelis-project/xelis-hash", branch = "master" }
-xelis-vm = { git = "https://github.com/xelis-project/xelis-vm", branch = "dev", features = ["logging"] }
-xelis-types = { git = "https://github.com/xelis-project/xelis-vm", branch = "dev" }
+primitive-types = { version = "0.12.2", features = ["serde"] }
+
+# Project-specific crates
 xelis-builder = { git = "https://github.com/xelis-project/xelis-vm", branch = "dev" }
-thiserror = "1"
-anyhow = "1"
-log = "0.4"
-fern = { version = "0.6", features = ["colored", "date-based"] }
-chrono = { version = "0.4.35", optional = true }
-reqwest = { version = "0.11.25", default-features = false, features = ["json"], optional = true }
-clap = { version = "4.5.2", features = ["derive"], optional = true }
-crossterm = { version = "0.27.0", optional = true }
-indexmap = { version = "2.7.0", features = ["serde"] }
+xelis-common = { path = "../xelis_common", features = ["prompt", "clap"] }
+xelis-hash = { git = "https://github.com/xelis-project/xelis-hash", branch = "master" }
+xelis-types = { git = "https://github.com/xelis-project/xelis-vm", branch = "dev" }
+xelis-vm = { git = "https://github.com/xelis-project/xelis-vm", branch = "dev", features = ["logging"] }
+
+# Optional / feature-based dependencies
 actix-rt = { version = "2.9.0", optional = true }
 actix-web = { version = "4", optional = true }
 actix-ws = { version = "0.3.0", optional = true }
-futures-util = { version = "0.3.30", optional = true }
-async-trait = "0.1.77"
-# Query system
-regex = "1"
-# Query system
-serde_regex = "1.1.0"
-# Used for U256
-primitive-types = { version = "0.12.2", features = ["serde"] }
-console-subscriber = { version = "0.2.0", optional = true }
-chacha20 = "0.9.1"
-# WebSocket support
-tokio-tungstenite-wasm = { version = "0.3.1", features = ["rustls-tls-webpki-roots"], optional = true }
 better_any = "0.2.0"
-log-panics = { version = "2", features = ["with-backtrace"]}
-zip = { version = "2.2.2", features = ["zstd"], default-features = false, optional = true }
+clap = { version = "4.5.2", features = ["derive"], optional = true }
+console-subscriber = { version = "0.2.0", optional = true }
+crossterm = { version = "0.27.0", optional = true }
 futures = { version = "0.3.31", optional = true }
-cfg-if = "1.0.0"
+futures-util = { version = "0.3.30", optional = true }
+reqwest = { version = "0.11.25", default-features = false, features = ["json"], optional = true }
+tokio-tungstenite-wasm = { version = "0.3.1", features = ["rustls-tls-webpki-roots"], optional = true }
+zip = { version = "2.2.2", features = ["zstd"], default-features = false, optional = true }
 
+# Platform-specific dependencies
 [target.'cfg(windows)'.dependencies]
 win32console = "0.1.5"
 
-# Tokio dependency for WASM
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
 tokio_with_wasm = { version = "0.7.2", features = ["macros", "sync", "time", "rt"], optional = true }
 
-# dependencies for non-WASM
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["macros", "signal", "time", "sync", "rt"], optional = true }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["full"] }
 criterion = "0.5.1"
+tokio = { version = "1", features = ["full"] }
 
 [features]
 tokio = ["dep:tokio", "dep:tokio_with_wasm", "dep:futures"]
