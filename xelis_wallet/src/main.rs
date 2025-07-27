@@ -84,21 +84,12 @@ pub struct RPCConfig {
     rpc_threads: Option<usize>
 }
 
-// Functions Helpers
-fn default_daemon_address() -> String {
-    DEFAULT_DAEMON_ADDRESS.to_owned()
-}
-
-fn default_precomputed_tables_l1() -> usize {
-    precomputed_tables::L1_FULL
-}
-
 fn default_log_filename() -> String {
-    String::from("xelis-wallet.log")
+    "xelis-wallet.log".to_string()
 }
 
 fn default_logs_path() -> String {
-    String::from("logs/")
+    "logs/".to_string()
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize)]
@@ -107,83 +98,81 @@ pub struct NetworkConfig {
     #[cfg(feature = "network_handler")]
     #[clap(long, default_value_t = String::from(DEFAULT_DAEMON_ADDRESS))]
     #[serde(default = "default_daemon_address")]
-    daemon_address: String,
+    pub daemon_address: String,
+
     /// Disable online mode
     #[cfg(feature = "network_handler")]
     #[clap(long)]
-    offline_mode: bool,
+    #[serde(default)]
+    pub offline_mode: bool,
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize)]
 pub struct PrecomputedTablesConfig {
-    /// L1 size for precomputed tables
-    /// By default, it is set to 26 (L1_FULL)
-    /// At each increment of 1, the size of the table is doubled
-    /// L1_FULL = 26, L1_MEDIUM = 18, L1_LOW = 13
+    /// L1 size for precomputed tables (e.g. 26 = L1_FULL)
     #[clap(long, default_value_t = precomputed_tables::L1_FULL)]
     #[serde(default = "default_precomputed_tables_l1")]
-    precomputed_tables_l1: usize,
-    /// Set the path to use for precomputed tables
-    /// 
-    /// By default, it will be from current directory.
+    pub precomputed_tables_l1: usize,
+
+    /// Optional path to precomputed tables (defaults to current directory)
     #[clap(long)]
-    precomputed_tables_path: Option<String>,
+    #[serde(default)]
+    pub precomputed_tables_path: Option<String>,
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize)]
 pub struct LogConfig {
-    /// Set log level
+    /// Log level for terminal output
     #[clap(long, value_enum, default_value_t = LogLevel::Info)]
     #[serde(default)]
-    log_level: LogLevel,
-    /// Set file log level
-    /// By default, it will be the same as log level
+    pub log_level: LogLevel,
+
+    /// Log level for file output (inherits terminal log level if not set)
     #[clap(long, value_enum)]
-    file_log_level: Option<LogLevel>,
-    /// Disable the log file
+    #[serde(default)]
+    pub file_log_level: Option<LogLevel>,
+
+    /// Disable writing logs to file
     #[clap(long)]
     #[serde(default)]
-    disable_file_logging: bool,
-    /// Disable the log filename date based
-    /// If disabled, the log file will be named xelis-wallet.log instead of YYYY-MM-DD.xelis-wallet.log
+    pub disable_file_logging: bool,
+
+    /// Disable date-based log filename
     #[clap(long)]
     #[serde(default)]
-    disable_file_log_date_based: bool,
-    /// Enable the log file auto compression
-    /// If enabled, the log file will be compressed every day
-    /// This will only work if the log file is enabled
+    pub disable_file_log_date_based: bool,
+
+    /// Enable daily compression of log files
     #[clap(long)]
     #[serde(default)]
-    auto_compress_logs: bool,
-    /// Disable the usage of colors in log
+    pub auto_compress_logs: bool,
+
+    /// Disable colorized logs in terminal
     #[clap(long)]
     #[serde(default)]
-    disable_log_color: bool,
-    /// Disable terminal interactive mode
-    /// You will not be able to write CLI commands in it or to have an updated prompt
+    pub disable_log_color: bool,
+
+    /// Disable interactive CLI prompt
     #[clap(long)]
     #[serde(default)]
-    disable_interactive_mode: bool,
-    /// Log filename
-    /// 
-    /// By default filename is xelis-wallet.log.
-    /// File will be stored in logs directory, this is only the filename, not the full path.
-    /// Log file is rotated every day and has the format YYYY-MM-DD.xelis-wallet.log.
-    #[clap(long, default_value_t = String::from("xelis-wallet.log"))]
+    pub disable_interactive_mode: bool,
+
+    /// Filename for the log (e.g. xelis-wallet.log)
+    #[clap(long, default_value_t = default_log_filename())]
     #[serde(default = "default_log_filename")]
-    filename_log: String,
-    /// Logs directory
-    /// 
-    /// By default it will be logs/ of the current directory.
-    /// It must end with a / to be a valid folder.
-    #[clap(long, default_value_t = String::from("logs/"))]
+    pub filename_log: String,
+
+    /// Directory for log files (must end with `/`)
+    #[clap(long, default_value_t = default_logs_path())]
     #[serde(default = "default_logs_path")]
-    logs_path: String,
-    /// Module configuration for logs
+    pub logs_path: String,
+
+    /// Custom per-module log settings
     #[clap(long)]
     #[serde(default)]
-    logs_modules: Vec<ModuleConfig>,
+    pub logs_modules: Vec<ModuleConfig>,
 }
+
 
 #[derive(Parser, Serialize, Deserialize)]
 #[clap(version = VERSION, about = "XELIS is an innovative cryptocurrency built from scratch with BlockDAG, Homomorphic Encryption, Zero-Knowledge Proofs, and Smart Contracts.")]
