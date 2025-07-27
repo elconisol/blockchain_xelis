@@ -1,95 +1,65 @@
+// Standard Library
 use std::{
     fs::File,
     io::Write,
     ops::ControlFlow,
     path::Path,
     sync::Arc,
-    time::Duration
+    time::Duration,
 };
-use anyhow::{Result, Context};
+
+// External Crates
+use anyhow::{Context, Result};
+use clap::Parser;
 use indexmap::IndexSet;
 use log::{error, info};
-use clap::Parser;
 use serde::{Deserialize, Serialize};
+
+// Common Project Modules
 use xelis_common::{
     async_handler,
-    config::{
-        init,
-        VERSION,
-        XELIS_ASSET
-    },
+    config::{init, VERSION, XELIS_ASSET},
     crypto::{
-        ecdlp,
-        Address,
-        Hash,
-        Hashable,
-        Signature,
-        HASH_SIZE
+        ecdlp, Address, Hash, Hashable, Signature, HASH_SIZE,
     },
     network::Network,
     prompt::{
-        argument::{
-            Arg,
-            ArgType,
-            ArgumentManager
-        },
-        command::{
-            Command,
-            CommandError,
-            CommandHandler,
-            CommandManager
-        },
-        Color,
-        LogLevel,
-        ModuleConfig,
-        Prompt,
-        PromptError
+        argument::{Arg, ArgType, ArgumentManager},
+        command::{Command, CommandError, CommandHandler, CommandManager},
+        Color, LogLevel, ModuleConfig, Prompt, PromptError,
     },
     serializer::Serializer,
     tokio,
     transaction::{
         builder::{FeeBuilder, MultiSigBuilder, TransactionTypeBuilder, TransferBuilder},
         multisig::{MultiSig, SignatureId},
-        BurnPayload,
-        MultiSigPayload,
-        Transaction,
-        TxVersion
+        BurnPayload, MultiSigPayload, Transaction, TxVersion,
     },
-    utils::{
-        format_coin,
-        format_xelis,
-        from_coin
-    }
+    utils::{format_coin, format_xelis, from_coin},
 };
+
+// Wallet Crate
 use xelis_wallet::{
     config::DIR_PATH,
     precomputed_tables,
-    wallet::{
-        RecoverOption,
-        Wallet
-    }
+    wallet::{RecoverOption, Wallet},
 };
 
+// Feature: network_handler
 #[cfg(feature = "network_handler")]
 use xelis_wallet::config::DEFAULT_DAEMON_ADDRESS;
 
+// Feature: api_server
 #[cfg(feature = "api_server")]
 use {
     xelis_wallet::{
-        api::{
-            AuthConfig,
-            PermissionResult,
-            AppStateShared
-        },
+        api::{AppStateShared, AuthConfig, PermissionResult},
         wallet::XSWDEvent,
     },
     xelis_common::{
-        rpc_server::RpcRequest,
         prompt::ShareablePrompt,
-        tokio::{
-            spawn_task,
-            sync::mpsc::UnboundedReceiver
-        }
+        rpc_server::RpcRequest,
+        tokio::{spawn_task, sync::mpsc::UnboundedReceiver},
     },
     anyhow::Error,
 };
