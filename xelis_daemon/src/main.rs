@@ -1,74 +1,55 @@
+// Submodules
 pub mod rpc;
 pub mod p2p;
 pub mod core;
 pub mod config;
 
-use config::{DEV_PUBLIC_KEY, STABLE_LIMIT};
+// Standard Crates
+use log::{debug, error, info, trace, warn};
+use serde::{Deserialize, Serialize};
+
+// External Crates
 use human_bytes::human_bytes;
 use humantime::{format_duration, Duration as HumanDuration};
-use log::{debug, error, info, trace, warn};
-use rpc::rpc::get_block_response_for_hash;
-use serde::{Deserialize, Serialize};
+
+// Local Crate
+use crate::config::{BLOCK_TIME_MILLIS, DEV_PUBLIC_KEY, MILLIS_PER_SECOND, STABLE_LIMIT};
+use crate::core::{
+    blockdag,
+    blockchain::{Blockchain, BroadcastOption, get_block_reward},
+    config::Config as InnerConfig,
+    hard_fork::{get_pow_algorithm_for_version, get_version_at_height},
+    storage::{Storage, SledStorage, StorageMode},
+};
+
+// Xelis Common Crate
 use xelis_common::{
     async_handler,
     config::{init, VERSION, XELIS_ASSET},
     context::Context,
-    crypto::{
-        Address,Hashable
-    },
-    immutable::Immutable,
+    crypto::{Address, Hashable},
     difficulty::Difficulty,
+    immutable::Immutable,
     network::Network,
     prompt::{
         Prompt,
-        command::{
-            CommandManager,
-            CommandError,
-            Command,
-            CommandHandler
-        },
-        PromptError,
-        argument::{
-            ArgumentManager,
-            Arg,
-            ArgType
-        },
         LogLevel,
         ModuleConfig,
+        PromptError,
         ShareablePrompt,
-        Color
+        Color,
+        command::{Command, CommandError, CommandHandler, CommandManager},
+        argument::{Arg, ArgType, ArgumentManager},
     },
     rpc_server::WebSocketServerHandler,
     serializer::Serializer,
     transaction::Transaction,
-    utils::{
-        format_hashrate,
-        format_xelis,
-        format_difficulty
-    }
+    utils::{format_difficulty, format_hashrate, format_xelis},
 };
-use crate::config::{
-    BLOCK_TIME_MILLIS,
-    MILLIS_PER_SECOND
-};
-use core::{
-    config::Config as InnerConfig,
-    blockchain::{
-        Blockchain,
-        BroadcastOption,
-        get_block_reward
-    },
-    storage::{
-        Storage,
-        SledStorage,
-        StorageMode,
-    },
-    blockdag,
-    hard_fork::{
-        get_pow_algorithm_for_version,
-        get_version_at_height
-    },
-};
+
+// Internal RPC Access
+use rpc::rpc::get_block_response_for_hash;
+
 use std::{
     fs::File,
     io::Write,
