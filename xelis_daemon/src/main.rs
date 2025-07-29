@@ -1,28 +1,40 @@
+// ─────────────────────────────────────────────────────────
 // Submodules
+// ─────────────────────────────────────────────────────────
 pub mod rpc;
 pub mod p2p;
 pub mod core;
 pub mod config;
 
-// Standard Crates
+// ─────────────────────────────────────────────────────────
+// Standard Library
+// ─────────────────────────────────────────────────────────
 use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
 
+// ─────────────────────────────────────────────────────────
 // External Crates
+// ─────────────────────────────────────────────────────────
 use human_bytes::human_bytes;
 use humantime::{format_duration, Duration as HumanDuration};
 
-// Local Crate
-use crate::config::{BLOCK_TIME_MILLIS, DEV_PUBLIC_KEY, MILLIS_PER_SECOND, STABLE_LIMIT};
-use crate::core::{
-    blockdag,
-    blockchain::{Blockchain, BroadcastOption, get_block_reward},
-    config::Config as InnerConfig,
-    hard_fork::{get_pow_algorithm_for_version, get_version_at_height},
-    storage::{Storage, SledStorage, StorageMode},
+// ─────────────────────────────────────────────────────────
+// Local Crate Imports
+// ─────────────────────────────────────────────────────────
+use crate::{
+    config::{BLOCK_TIME_MILLIS, DEV_PUBLIC_KEY, MILLIS_PER_SECOND, STABLE_LIMIT},
+    core::{
+        blockdag,
+        blockchain::{Blockchain, BroadcastOption, get_block_reward},
+        config::Config as InnerConfig,
+        hard_fork::{get_pow_algorithm_for_version, get_version_at_height},
+        storage::{SledStorage, Storage, StorageMode},
+    },
 };
 
-// Xelis Common Crate
+// ─────────────────────────────────────────────────────────
+// Xelis Common Crate Imports
+// ─────────────────────────────────────────────────────────
 use xelis_common::{
     async_handler,
     config::{init, VERSION, XELIS_ASSET},
@@ -46,6 +58,7 @@ use xelis_common::{
     transaction::Transaction,
     utils::{format_difficulty, format_hashrate, format_xelis},
 };
+
 
 // Internal RPC Access
 use rpc::rpc::get_block_response_for_hash;
