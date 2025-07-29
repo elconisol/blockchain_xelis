@@ -77,21 +77,31 @@ use anyhow::{
     Context as AnyContext
 };
 
-// Functions helpers for serde default values
+// ─────────────────────────────────────────────────────────
+// Serde Default Helpers
+// ─────────────────────────────────────────────────────────
+
 fn default_filename_log() -> String {
-    "xelis-daemon.log".to_owned()
+    "xelis-daemon.log".to_string()
 }
 
 fn default_logs_path() -> String {
-    "logs/".to_owned()
+    "logs/".to_string()
 }
 
-// Default cache size
+// ─────────────────────────────────────────────────────────
+// Default Cache Size
+// ─────────────────────────────────────────────────────────
+
 const DEFAULT_DB_CACHE_CAPACITY: u64 = 16 * 1024 * 1024; // 16 MB
 
 fn default_db_cache_size() -> u64 {
     DEFAULT_DB_CACHE_CAPACITY
 }
+
+// ─────────────────────────────────────────────────────────
+// Log Configuration
+// ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Parser, Serialize, Deserialize)]
 pub struct LogConfig {
@@ -99,54 +109,59 @@ pub struct LogConfig {
     #[clap(long, value_enum, default_value_t = LogLevel::Info)]
     #[serde(default)]
     log_level: LogLevel,
+
     /// Set file log level
     /// By default, it will be the same as log level
     #[clap(long, value_enum)]
     file_log_level: Option<LogLevel>,
+
     /// Disable the log file
     #[clap(long)]
     #[serde(default)]
     disable_file_logging: bool,
+
     /// Disable the log filename date based
     /// If disabled, the log file will be named xelis-daemon.log instead of YYYY-MM-DD.xelis-daemon.log
     #[clap(long)]
     #[serde(default)]
     disable_file_log_date_based: bool,
+
     /// Disable the usage of colors in log
     #[clap(long)]
     #[serde(default)]
     disable_log_color: bool,
+
     /// Disable terminal interactive mode
-    /// You will not be able to write CLI commands in it or to have an updated prompt
+    /// You will not be able to write CLI commands or use prompt updates
     #[clap(long)]
     #[serde(default)]
     disable_interactive_mode: bool,
+
     /// Enable the log file auto compression
-    /// If enabled, the log file will be compressed every day
-    /// This will only work if the log file is enabled
+    /// If enabled, the log file will be compressed daily
+    /// This only applies when file logging is enabled
     #[clap(long)]
     #[serde(default)]
     auto_compress_logs: bool,
-    /// Log filename
-    /// 
-    /// By default filename is xelis-daemon.log.
-    /// File will be stored in logs directory, this is only the filename, not the full path.
-    /// Log file is rotated every day and has the format YYYY-MM-DD.xelis-daemon.log.
-    #[clap(long, default_value_t = String::from("xelis-daemon.log"))]
+
+    /// Log filename (not the full path)
+    /// Default: xelis-daemon.log. Stored inside `logs/` directory.
+    #[clap(long, default_value_t = default_filename_log())]
     #[serde(default = "default_filename_log")]
     filename_log: String,
-    /// Logs directory
-    /// 
-    /// By default it will be logs/ of the current directory.
-    /// It must end with a / to be a valid folder.
-    #[clap(long, default_value_t = String::from("logs/"))]
+
+    /// Logs directory (must end with `/`)
+    /// Default: logs/
+    #[clap(long, default_value_t = default_logs_path())]
     #[serde(default = "default_logs_path")]
     logs_path: String,
-    /// Module configuration for logs
+
+    /// Module-specific logging configuration
     #[clap(long)]
     #[serde(default)]
     logs_modules: Vec<ModuleConfig>,
 }
+
 
 #[derive(Parser, Serialize, Deserialize)]
 #[clap(version = VERSION, about = "XELIS is an innovative cryptocurrency built from scratch with BlockDAG, Homomorphic Encryption, Zero-Knowledge Proofs, and Smart Contracts.")]
