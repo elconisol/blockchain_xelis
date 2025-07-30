@@ -320,22 +320,31 @@ async fn main() -> Result<()> {
         return Ok(())
     }
 
-    let address = config.miner_address.ok_or_else(|| Error::msg("No miner address specified"))?;
-    info!("Miner address: {}", address);    
-    if threads != detected_threads {
-        warn!("Attention, the number of threads used may not be optimal, recommended is: {}", detected_threads);
-    }
+let address = config
+    .miner_address
+    .ok_or_else(|| Error::msg("No miner address specified"))?;
+info!("Miner address: {}", address);
 
-    // broadcast channel to send new jobs / exit command to all threads
-    let (sender, _) = broadcast::channel::<ThreadNotification>(threads as usize);
-    // mpsc channel to send from threads to the "communication" task.
-    let (block_sender, block_receiver) = mpsc::channel::<MinerWork>(threads as usize);
-    for id in 0..threads {
-        debug!("Starting thread #{}", id);
-        if let Err(e) = start_thread(id, sender.subscribe(), block_sender.clone()) {
-            error!("Error while creating Mining Thread #{}: {}", id, e);
-        }
+if threads != detected_threads {
+    warn!(
+        "Attention: Number of mining threads used is {}, but the recommended is: {}",
+        threads, detected_threads
+    );
+}
+
+// Broadcast channel for sending jobs or exit notifications to all threads
+let (sender, _) = broadcast::channel::<ThreadNotification>(threads as usize);
+
+// MPSC channel for collecting mined work from all threads
+let (block_sender, block_receiver) = mpsc::channel::<MinerWork>(threads as usize);
+
+for id in 0..threads {
+    debug!("Starting mining thread #{}", id);
+    if let Err(e) = start_thread(id, sender.subscribe(), block_sender.clone()) {
+        error!("Failed to spawn mining thread #{}: {}", id, e);
     }
+}
+
 
     // start communication task
     let task = spawn_task("communication", communication_task(config.daemon_address, sender.clone(), block_receiver, address, config.worker));
