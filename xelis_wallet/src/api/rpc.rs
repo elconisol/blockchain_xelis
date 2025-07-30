@@ -85,30 +85,20 @@ pub fn register_methods(handler: &mut RPCHandler<Arc<Wallet>>) {
     handler.register_method("query_db", async_handler!(query_db));
 }
 
-// Retrieve the version of the wallet
-async fn get_version(_: &Context, body: Value) -> Result<Value, InternalRpcError> {
-    if body != Value::Null {
-        return Err(InternalRpcError::UnexpectedParams)
-    }
-    Ok(json!(VERSION))
-}
-
-// Retrieve the network of the wallet
-async fn get_network(context: &Context, body: Value) -> Result<Value, InternalRpcError> {
-    if body != Value::Null {
-        return Err(InternalRpcError::UnexpectedParams)
-    }
-
-    let wallet: &Arc<Wallet> = context.get()?;
-    let network = wallet.get_network();
-    Ok(json!(network))
-}
-
 // Retrieve the current nonce of the wallet
 async fn get_nonce(context: &Context, body: Value) -> Result<Value, InternalRpcError> {
     if body != Value::Null {
         return Err(InternalRpcError::UnexpectedParams)
     }
+
+    let wallet: &Arc<Wallet> = context.get()?;
+    let address = wallet.get_address();
+
+    let daemon = wallet.get_daemon();
+    let nonce = daemon.get_nonce(address).await?;
+
+    Ok(json!(nonce))
+}
 
     let wallet: &Arc<Wallet> = context.get()?;
     let storage = wallet.get_storage().read().await;
