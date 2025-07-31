@@ -50,33 +50,46 @@ pub enum State {
 }
 
 pub struct Connection {
-    // True mean we are the client
+    // True if this instance initiated the connection (client)
     out: bool,
-    // State of the connection
+
+    // Current state of the connection (likely an enum like Connected, Disconnected, etc.)
     state: State,
-    // write to stream
+
+    // Write end of the TCP stream (used for sending data), protected by a mutex
     write: Mutex<OwnedWriteHalf>,
-    // read from stream
+
+    // Read end of the TCP stream (used for receiving data), protected by a mutex
     read: Mutex<OwnedReadHalf>,
-    // TCP Address
+
+    // IP address and port of the remote peer
     addr: SocketAddr,
-    // total bytes read
+
+    // Total bytes read from the connection
     bytes_in: AtomicUsize,
-    // total bytes sent
+
+    // Total bytes written to the connection
     bytes_out: AtomicUsize,
-    // total bytes encrypted and sent using same encryption key
+
+    // Total bytes encrypted and sent using the same encryption key
     bytes_encrypted: AtomicUsize,
-    // when the connection was established
+
+    // Timestamp when the connection was established
     connected_on: TimestampSeconds,
-    // if Connection#close() is called, close is set to true
+
+    // Whether the connection was explicitly closed
     closed: AtomicBool,
-    // How many key rotation we got
+
+    // Number of incoming key rotations (peer changed their encryption key)
     rotate_key_in: AtomicUsize,
-    // How many key rotation we sent
+
+    // Number of outgoing key rotations (we changed our encryption key)
     rotate_key_out: AtomicUsize,
-    // Encryption state used for packets
-    encryption: Encryption
+
+    // Encryption handler/state for encrypting/decrypting packets
+    encryption: Encryption,
 }
+
 
 // We are rotating every 1GB sent
 const ROTATE_EVERY_N_BYTES: usize = 1024 * 1024 * 1024;
