@@ -1,26 +1,28 @@
 use crate::{
+    BLOCK_TIME,
     config::{
         get_hard_forks as get_configured_hard_forks,
         BLOCK_TIME_MILLIS,
         DEV_FEES,
-        DEV_PUBLIC_KEY
+        DEV_PUBLIC_KEY,
     },
     core::{
         blockchain::{
+            Blockchain,
+            BroadcastOption,
             get_block_dev_fee,
             get_block_reward,
-            Blockchain,
-            BroadcastOption
         },
-        hard_fork::get_pow_algorithm_for_version,
         error::BlockchainError,
+        hard_fork::get_pow_algorithm_for_version,
         mempool::Mempool,
         storage::*,
     },
     p2p::peer::Peer,
-    BLOCK_TIME
 };
-use super::{InternalRpcError, ApiError};
+
+use super::{ApiError, InternalRpcError};
+
 use xelis_common::{
     api::{
         daemon::*,
@@ -31,37 +33,19 @@ use xelis_common::{
     },
     asset::RPCAssetData,
     async_handler,
-    block::{
-        Block,
-        BlockHeader,
-        MinerWork,
-        TopoHeight
-    },
-    config::{
-        MAXIMUM_SUPPLY,
-        MAX_TRANSACTION_SIZE,
-        VERSION,
-        XELIS_ASSET
-    },
+    block::{Block, BlockHeader, MinerWork, TopoHeight},
+    config::{MAXIMUM_SUPPLY, MAX_TRANSACTION_SIZE, VERSION, XELIS_ASSET},
     context::Context,
     crypto::{Address, AddressType, Hash},
-    difficulty::{
-        CumulativeDifficulty,
-        Difficulty
-    },
+    difficulty::{CumulativeDifficulty, Difficulty},
     immutable::Immutable,
-    rpc_server::{
-        parse_params,
-        RPCHandler
-    },
+    rpc_server::{parse_params, RPCHandler},
     serializer::Serializer,
     time::TimestampSeconds,
-    transaction::{
-        Transaction,
-        TransactionType
-    },
-    utils::format_hashrate
+    transaction::{Transaction, TransactionType},
+    utils::format_hashrate,
 };
+
 use anyhow::Context as AnyContext;
 use human_bytes::human_bytes;
 use serde_json::{json, Value};
