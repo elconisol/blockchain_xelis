@@ -176,11 +176,13 @@ pub struct BenchmarkConfig {
     /// Enable the benchmark mode with the specified algorithm
     #[clap(long)]
     benchmark: Option<Algorithm>,
+
     /// Iterations to run the benchmark
     #[clap(long, default_value_t = 100)]
     #[serde(default = "default_iterations")]
     iterations: usize,
 }
+
 
 #[derive(Parser, Serialize, Deserialize)]
 #[clap(version = VERSION, about = "XELIS is an innovative cryptocurrency built from scratch with BlockDAG, Homomorphic Encryption, Zero-Knowledge Proofs, and Smart Contracts.")]
