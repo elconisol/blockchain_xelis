@@ -35,25 +35,39 @@ impl<'a> MerkleBuilder<'a> {
         }
     }
 
-    // Add a hash to the list of hashes
-    pub fn add<E: Into<Cow<'a, Hash>>>(&mut self, element: E) {
-        self.hashes.push(element.into());
+   impl<'a> HashAccumulator<'a> {
+    /// Inserts a hash (borrowed or owned) into the accumulator.
+    pub fn add_hash<E: Into<Cow<'a, Hash>>>(&mut self, hash: E) {
+        self.hashes.push(hash.into());
     }
 
-    // Add an element by hashing and adding it to the list of hashes
-    pub fn add_element<S: Serializer>(&mut self, element: &S) {
-        self.hashes.push(Cow::Owned(hash(&element.to_bytes())));
+    /// Serializes an element and appends its hash to the accumulator.
+    ///
+    /// This is useful when adding domain-specific structures (e.g., transactions, blocks).
+    pub fn add_serialized<S: Serializer>(&mut self, element: &S) {
+        let serialized = element.to_bytes();
+        let hashed = hash(&serialized);
+        self.push_hashed(hashed);
     }
 
-    /// Add a byte array to the list of hashes
-    pub fn add_bytes(&mut self, bytes: &[u8]) {
-        self.hashes.push(Cow::Owned(hash(bytes)));
+    /// Hashes a raw byte slice and appends it to the accumulator.
+    pub fn add_raw_bytes(&mut self, data: &[u8]) {
+        let hashed = hash(data);
+        self.push_hashed(hashed);
     }
 
-    // Convert a byte array of HASH_SIZE to a Hash and add it to the list of hashes
-    pub fn add_as_hash(&mut self, bytes: [u8; HASH_SIZE]) {
-        self.hashes.push(Cow::Owned(Hash::new(bytes)));
+    /// Converts a fixed-size byte array into a `Hash` and adds it.
+    ///
+    /// Assumes the byte array is exactly `HASH_SIZE` bytes.
+    pub fn add_raw_hash(&mut self, bytes: [u8; HASH_SIZE]) {
+        self.push_hashed(Hash::new(bytes));
     }
+
+    /// Internal utility to insert an owned hash.
+    #[inline]
+    fn push_hashed(&mut self, hashed: Hash) {
+        sel
+
 
     // Build the merkle tree and return the root hash
     pub fn build(&mut self) -> Hash {
