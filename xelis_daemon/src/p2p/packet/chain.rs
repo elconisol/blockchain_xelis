@@ -45,13 +45,18 @@ impl BlockId {
     }
 }
 
+use std::hash::{Hash as StdHash, Hasher};
+use crate::serializer::{Serializer, Writer, Reader, ReaderError};
+
 impl StdHash for BlockId {
+    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.hash.hash(state);
     }
 }
 
 impl PartialEq for BlockId {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.hash == other.hash
     }
@@ -66,13 +71,16 @@ impl Serializer for BlockId {
     }
 
     fn read(reader: &mut Reader) -> Result<Self, ReaderError> {
-        Ok(Self::new(reader.read_hash()?, reader.read_u64()?))
+        let hash = reader.read_hash()?;
+        let topoheight = reader.read_u64()?;
+        Ok(Self::new(hash, topoheight))
     }
 
     fn size(&self) -> usize {
         self.hash.size() + self.topoheight.size()
     }
 }
+
 
 #[derive(Clone, Debug)]
 pub struct ChainRequest {
