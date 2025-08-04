@@ -32,27 +32,59 @@ pub enum Simulator {
     Stress,
 }
 
+use std::str::FromStr;
+use serde::ser::{Serialize, Serializer};
+use std::fmt;
+
+#[derive(Debug, Clone, Copy)]
+pub enum Simulator {
+    Blockchain,
+    BlockDag,
+    Stress,
+}
+
+impl Simulator {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Simulator::Blockchain => "blockchain",
+            Simulator::BlockDag => "blockdag",
+            Simulator::Stress => "stress",
+        }
+    }
+
+    fn from_str_internal(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "blockchain" | "0" => Some(Simulator::Blockchain),
+            "blockdag"   | "1" => Some(Simulator::BlockDag),
+            "stress"     | "2" => Some(Simulator::Stress),
+            _ => None,
+        }
+    }
+}
+
 impl FromStr for Simulator {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "blockchain" | "0" => Self::Blockchain,
-            "blockdag" | "1" => Self::BlockDag,
-            "stress" | "2" => Self::Stress,
-            _ => return Err("Invalid simulator type".into())
-        })
+        Self::from_str_internal(s).ok_or_else(|| format!("Invalid simulator type: '{}'", s))
+    }
+}
+
+impl fmt::Display for Simulator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
 impl Serialize for Simulator {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer
+        S: Serializer,
     {
-        serializer.serialize_str(&self.to_string())
+        serializer.serialize_str(self.as_str())
     }
 }
+
 
 impl<'a> Deserialize<'a> for Simulator {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
