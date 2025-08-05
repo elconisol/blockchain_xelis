@@ -59,8 +59,11 @@ struct ChainState {
     env: Environment,
 }
 
+use std::collections::HashMap;
+
 impl ChainState {
-    fn new() -> Self {
+    /// Creates a new, empty blockchain state instance.
+    pub fn new() -> Self {
         Self {
             accounts: HashMap::new(),
             multisig: HashMap::new(),
@@ -70,18 +73,47 @@ impl ChainState {
     }
 }
 
-#[derive(Clone)]
+/// Represents a balance entry for a specific asset.
+#[derive(Clone, Debug)]
 struct Balance {
+    /// Encrypted representation for zero-knowledge proofs or privacy features.
     ciphertext: CiphertextCache,
-    balance: u64,
+
+    /// Actual balance in smallest units (e.g., satoshis).
+    amount: u64,
 }
 
-#[derive(Clone)]
+impl Balance {
+    pub fn new(ciphertext: CiphertextCache, amount: u64) -> Self {
+        Self { ciphertext, amount }
+    }
+
+    pub fn amount(&self) -> u64 {
+        self.amount
+    }
+}
+
+/// Represents a user account in the chain state.
+#[derive(Clone, Debug)]
 struct Account {
+    /// Maps asset hashes to their corresponding balances.
     balances: HashMap<Hash, Balance>,
+
+    /// The key pair used for signing transactions or authentication.
     keypair: KeyPair,
+
+    /// Nonce to prevent replay attacks and enforce transaction ordering.
     nonce: Nonce,
 }
+
+impl Account {
+    pub fn new(keypair: KeyPair) -> Self {
+        Self {
+            balances: HashMap::new(),
+            keypair,
+            nonce: Nonce::default(),
+        }
+
 
 impl Account {
     fn new() -> Self {
