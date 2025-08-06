@@ -106,37 +106,22 @@ impl Query {
     pub fn verify_element(&self, element: &DataElement) -> bool {
         match self {
             Self::Element(query) => query.verify(element),
+
             Self::Value(query) => match element {
                 DataElement::Value(value) => query.verify(value),
-                DataElement::Array(array) => {
-                    for element in array {
-                        if self.verify_element(element) {
-                            return true
-                        }
-                    }
-                    false
-                },
-                _ => false
-            }
-            Self::Not(op) => !op.verify_element(element),
-            Self::Or(operations) => {
-                for op in operations {
-                    if op.verify_element(element) {
-                        return true
-                    }
-                }
-                false
-            }
-            Self::And(operations) => {
-                for op in operations {
-                    if !op.verify_element(element) {
-                        return false
-                    }
-                }
-                true
-            }
+                DataElement::Array(array) => array.iter().any(|el| self.verify_element(el)),
+                _ => false,
+            },
+
+            Self::Not(inner_query) => !inner_query.verify_element(element),
+
+            Self::Or(queries) => queries.iter().any(|q| q.verify_element(element)),
+
+            Self::And(queries) => queries.iter().all(|q| q.verify_element(element)),
         }
     }
+}
+
 
     pub fn verify_value(&self, value: &DataValue) -> bool {
         match self {
