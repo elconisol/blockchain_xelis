@@ -100,38 +100,43 @@ use log::{
 
 #[cfg(feature = "api_server")]
 use {
-    serde_json::{json, Value},
     async_trait::async_trait,
+    serde_json::{json, Value},
+
     crate::api::{
         register_rpc_methods,
-        XSWD,
-        WalletRpcServer,
-        AuthConfig,
         APIServer,
         AppStateShared,
-        PermissionResult,
+        AuthConfig,
         PermissionRequest,
-        XSWDHandler
+        PermissionResult,
+        WalletRpcServer,
+        XSWD,
+        XSWDHandler,
     },
-    xelis_common::{
+
+     xelis_common::{
+        crypto::elgamal::PublicKey as DecompressedPublicKey,
+
         rpc_server::{
-            RPCHandler,
-            RpcRequest,
             InternalRpcError,
+            JSON_RPC_VERSION,
+            RpcRequest,
             RpcResponseError,
-            JSON_RPC_VERSION
+            RPCHandler,
         },
+
         tokio::sync::{
             mpsc::{
-                UnboundedSender,
+                unbounded_channel,
                 UnboundedReceiver,
-                unbounded_channel
+                UnboundedSender,
             },
             oneshot,
         },
-        crypto::elgamal::PublicKey as DecompressedPublicKey
-    }
-};
+    },
+
+
 
 // Recover option for wallet creation
 pub enum RecoverOption<'a> {
