@@ -139,12 +139,7 @@ pub async fn read_or_generate_precomputed_tables<P: ecdlp::ProgressTableGenerati
             let opts = FileSystemGetFileOptions::new();
             opts.set_create(true);
 
-            let file_handle: Option<FileSystemFileHandle> = match directory {
-                Some(directory) => Some(execute!(directory.get_file_handle_with_options(path.as_str(), &opts), File)?),
-                None => None
-            };
-            generate_tables(path.as_str(), l1, file_handle, progress_report, store_on_disk).await?
-        }
+            let file_ha
     };
 
     Ok(Arc::new(RwLock::new(tables)))
@@ -173,7 +168,7 @@ async fn generate_tables<P: ecdlp::ProgressTableGenerationReportFunction>(path: 
         let buffer = Uint8Array::new_with_length(slice.len() as u32);
         buffer.copy_from(slice);
 
-        let promise = writable.write_with_buffer_source(&buffer).map_err(|e| PrecomputedTablesError::Write(format!("{:?}", e)))?;
+        let promise = writable.write_with_buffer_source(&buffer)?;
         let _: JsValue = execute!(promise, WriteResult)?;
         let _: JsValue = execute!(writable.close(), WriteClose)?;
     } else {
