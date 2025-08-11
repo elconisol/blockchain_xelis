@@ -7,37 +7,40 @@
 use std::env;
 use std::process::Command;
 
+use std::process::Command;
+
+/// Entry point for Cargo build script
 fn main() {
-    // Try to read commit hash from environment (CI/CD override)
+    // Try env var first (CI/CD override), otherwise fallback to Git, otherwise "unknown"
     let commit_hash = option_env!("XELIS_COMMIT_HASH")
-        .map(|hash| hash[..7].to_string())
-        .unwrap_or_else(get_git_commit_hash);
+        .map(|hash| hash.chars().take(7).collect::<String>())
+        .or_else(get_git_commit_hash_safe)
+        .unwrap_or_else(|| "unknown".to_string());
 
     let version = env!("CARGO_PKG_VERSION");
     let build_version = format!("{version}-{commit_hash}");
 
-    // Re-run build script if this env changes (useful in CI workflows)
+    // Re-run build script if this env changes (important for CI)
     println!("cargo:rerun-if-env-changed=XELIS_COMMIT_HASH");
 
     // Set BUILD_VERSION as env var at compile time
     println!("cargo:rustc-env=BUILD_VERSION={build_version}");
 }
 
-/// Fallback function: get the current Git commit hash (short)
-fn get_git_commit_hash() -> String {
+/// Try to get Git commit hash (short). Return None if git isn't available or fails.
+fn get_git_commit_hash_safe() -> Option<String> {
     let output = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
         .output()
-        .expect("Failed to execute `git rev-parse`");
+        .ok()?; // Return None if command fails to run
 
     if !output.status.success() {
-        panic!(
-            "Git command returned non-zero exit status: {}",
-            output.status
-        );
+        return None;
     }
 
-    String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .to_string()
+    Some(
+        String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .to_string(),
+    )
 }
