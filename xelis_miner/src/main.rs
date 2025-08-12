@@ -225,20 +225,44 @@ pub struct Config {
     generate_config_template: bool
 }
 
+use serde::{Serialize, Deserialize};
+
 #[derive(Clone)]
-enum ThreadNotification<'a> {
-    NewJob(Algorithm, MinerWork<'a>, Difficulty, u64), // POW algorithm, block work, difficulty, height
-    WebSocketClosed, // WebSocket connection has been closed
-    Exit // all threads must stop
+pub enum ThreadNotification<'a> {
+    /// New mining job available for the worker thread
+    NewJob {
+        algorithm: Algorithm,
+        work: MinerWork<'a>,
+        difficulty: Difficulty,
+        height: u64,
+    },
+    /// WebSocket connection closed
+    WebSocketClosed,
+    /// All threads should stop
+    Exit,
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")] 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SocketMessage {
     NewJob(GetMinerWorkResult),
     BlockAccepted,
-    BlockRejected(String)
+    BlockRejected(String),
 }
+
+// Optional: conversion if relevant
+impl<'a> From<ThreadNotification<'a>> for Option<SocketMessage> {
+    fn from(notification: ThreadNotification<'a>) -> Self {
+        match notification {
+            ThreadNotification::NewJob { work, .. } => {
+                Some(SocketMessage::NewJob(GetMinerWorkResult::from(work)))
+            }
+            ThreadNotification::WebSocketClosed => None,
+            ThreadNotification::Exit => None,
+        }
+    }
+}
+
 
 static WEBSOCKET_CONNECTED: AtomicBool = AtomicBool::new(false);
 static CURRENT_TOPO_HEIGHT: AtomicU64 = AtomicU64::new(0);
