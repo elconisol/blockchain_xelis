@@ -457,12 +457,21 @@ async fn broadcast_stats_task(broadcast_address: String) -> Result<(), Box<dyn s
 
 // Benchmark the miner with the specified number of threads and iterations
 // It will output the total time, total iterations, time per PoW and hashrate for each number of threads
+use std::thread;
+use std::time::Instant;
+use log::info;
+
 fn benchmark(threads: usize, iterations: usize, algorithm: Algorithm) {
-    info!("{0: <10} | {1: <10} | {2: <16} | {3: <13} | {4: <13}", "Threads", "Total Time", "Total Iterations", "Time/PoW (ms)", "Hashrate");
+    info!(
+        "{:<10} | {:<12} | {:<18} | {:<15} | {:<13}",
+        "Threads", "Total Time", "Total Iterations", "Time/PoW (ms)", "Hashrate"
+    );
 
     for bench in 1..=threads {
+        let total_iters = bench * iterations;
         let start = Instant::now();
-        let mut handles = vec![];
+
+        let mut handles = Vec::with_capacity(bench);
         for _ in 0..bench {
             let job = MinerWork::new(Hash::zero(), get_current_time_in_millis());
             let mut worker = Worker::new();
@@ -477,14 +486,23 @@ fn benchmark(threads: usize, iterations: usize, algorithm: Algorithm) {
             handles.push(handle);
         }
 
-        for handle in handles { // wait on all threads
+        // Wait for all threads
+        for handle in handles {
             handle.join().unwrap();
         }
-        let duration = start.elapsed().as_millis();
-        let hashrate = format_hashrate(1000f64 / (duration as f64 / (bench*iterations) as f64));
-        info!("{0: <10} | {1: <10} | {2: <16} | {3: <13} | {4: <13}", bench, duration, bench*iterations, duration/(bench*iterations) as u128, hashrate);
+
+        let duration = start.elapsed();
+        let total_time_ms = duration.as_secs_f64() * 1000.0;
+        let time_per_pow = total_time_ms / total_iters as f64;
+        let hashrate = format_hashrate(1000.0 / time_per_pow);
+
+        info!(
+            "{:<10} | {:<12.3} | {:<18} | {:<15.3} | {:<13}",
+            bench, total_time_ms, total_iters, time_per_pow, hashrate
+        );
     }
 }
+
 
 // this Tokio task will runs indefinitely until the user stop himself the miner.
 // It maintains a WebSocket connection with the daemon and notify all threads when it receive a new job.
