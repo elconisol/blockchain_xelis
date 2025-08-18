@@ -85,36 +85,48 @@ pub fn register_methods(handler: &mut RPCHandler<Arc<Wallet>>) {
     handler.register_method("query_db", async_handler!(query_db));
 }
 
-// Retrieve the version of the wallet
-async fn get_version(_: &Context, body: Value) -> Result<Value, InternalRpcError> {
-    if body != Value::Null {
-        return Err(InternalRpcError::UnexpectedParams)
+use serde_json::{json, Value};
+use std::sync::Arc;
+use crate::{
+    rpc::InternalRpcError,
+    wallet::Wallet,
+    context::Context,
+};
+
+/// Utility: Ensure no params were passed in
+fn ensure_no_params(body: &Value) -> Result<(), InternalRpcError> {
+    if *body != Value::Null {
+        Err(InternalRpcError::UnexpectedParams)
+    } else {
+        Ok(())
     }
-    Ok(json!(VERSION))
 }
 
-// Retrieve the network of the wallet
-async fn get_network(context: &Context, body: Value) -> Result<Value, InternalRpcError> {
-    if body != Value::Null {
-        return Err(InternalRpcError::UnexpectedParams)
-    }
+/// Register all wallet-related RPC methods
+pub fn register_wallet_rpc_methods(registry: &mut RpcRegistry) {
+    // get_version
+    registry.register_async("get_version", |_ctx: &Context, body: Value| async move {
+        ensure_no_params(&body)?;
+        Ok(json!(env!("CARGO_PKG_VERSION")))
+    });
 
-    let wallet: &Arc<Wallet> = context.get()?;
-    let network = wallet.get_network();
-    Ok(json!(network))
+    // get_network
+    registry.register_async("get_network", |ctx: &Context, body: Value| async move {
+        ensure_no_params(&body)?;
+        let wallet: &Arc<Wallet> = ctx.get()?;
+        Ok(json!(wallet.get_network()))
+    });
+
+    // get_nonce
+    registry.register_async("get_nonce", |ctx: &Context, body: Value| async move {
+        ensure_no_params(&body)?;
+        let wallet: &Arc<Wallet> = ctx.get()?;
+        let storage = wallet.get_storage().read().await;
+        let nonce = storage.get_nonce().map_err(InternalRpcError::from)?;
+        Ok(json!(nonce))
+    });
 }
 
-// Retrieve the current nonce of the wallet
-async fn get_nonce(context: &Context, body: Value) -> Result<Value, InternalRpcError> {
-    if body != Value::Null {
-        return Err(InternalRpcError::UnexpectedParams)
-    }
-
-    let wallet: &Arc<Wallet> = context.get()?;
-    let storage = wallet.get_storage().read().await;
-    let nonce = storage.get_nonce()?;
-    Ok(json!(nonce))
-}
 
 // Retrieve the current topoheight until which the wallet is synced
 async fn get_topoheight(context: &Context, body: Value) -> Result<Value, InternalRpcError> {
