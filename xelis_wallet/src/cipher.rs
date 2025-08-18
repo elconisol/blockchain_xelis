@@ -58,24 +58,33 @@ impl Cipher {
         Ok(encrypted)
     }
 
-    // decrypt any value loaded from disk, with the format of above function
-    pub fn decrypt_value(&self, encrypted: &[u8]) -> Result<Vec<u8>> {
-        // nonce is 24 bytes and is mandatory in encrypted slice
-        if encrypted.len() < 25 {
-            return Err(WalletError::InvalidEncryptedValue.into())
-        }
-
-        // read the nonce for this data 
-        let nonce = XNonce::from_slice(&encrypted[0..24]);
-        // decrypt the value using the nonce previously decoded
-        let mut decrypted = self.cipher.decrypt(nonce, &encrypted[nonce.len()..]).map_err(|e| WalletError::CryptoError(e))?;
-        // delete the salt from the decrypted slice
-        if let Some(salt) = &self.salt {
-            decrypted.drain(0..salt.len());
-        }
-
-        Ok(decrypted)
+  /// Decrypts a value previously encrypted with `encrypt_value`.
+/// Expects format: [24-byte nonce || ciphertext].
+pub fn decrypt_value(&self, encrypted: &[u8]) -> Result<Vec<u8>> {
+    // Ensure slice contains at least nonce + 1 byte
+    if encrypted.len() <= 24 {
+        return Err(WalletError::InvalidEncryptedValue.into());
     }
+
+    // Extract nonce
+    let nonce = XNonce::from_slice(&encrypted[..24]);
+
+    // Decrypt remaining slice
+    let mut decrypted = self
+        .cipher
+        .decrypt(nonce, &encrypted[24..])
+        .map_err(WalletError::CryptoError)?;
+
+    // Remove optional salt prefix
+    if let Some(salt) = &self.salt {
+        if decrypted.len() < salt.len() {
+            return Err(WalletError::InvalidEncryptedValue.into());
+        }
+        decrypted.drain(..salt.len());
+    }
+
+    Ok(decrypted)
+}
 
     // hash the key with salt
     pub fn hash_key<S: AsRef<[u8]>>(&self, key: S) -> [u8; HASH_SIZE] {
