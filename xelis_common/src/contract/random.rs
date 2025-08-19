@@ -1,43 +1,66 @@
+// === External Crates ===
 use anyhow::Context;
 use blake3::OutputReader;
+use serde::{Serialize, Deserialize};
+use serde_json::Value;
+use std::{
+    sync::Arc,
+    thread,
+    time::Instant,
+};
+use xelis_vm::tid;
 
-use crate::crypto::Hash;
+// === Local Imports ===
+use crate::{
+    account::CiphertextCache,
+    asset::AssetData,
+    block::TopoHeight,
+    crypto::{Hash, PublicKey},
+    wallet::{Wallet, WalletError},
+    storage::ContractStorage,
+    worker::{Worker, MinerWork, Algorithm, Difficulty},
+    utils::{format_hashrate, get_current_time_in_millis},
+};
 
-// Deterministic random number generator
-// This is used to generate random numbers in a deterministic way
-// It is based on the blake3 hash function
-#[derive(Debug, Clone)]
-pub struct DeterministicRandom {
-    // Key for the random number generator
-    // Blake3 support up to 2^64 - 1 bytes
-    // We need to check pos is less than 2^64 - 1
-    reader: OutputReader,
+// ======================================
+// Thread Notifications & Socket Messages
+// ======================================
+
+#[derive(Clone)]
+enum ThreadNotification<'a> {
+    NewJob(Algorithm, MinerWork<'a>, Difficulty, u64), // POW algorithm, block work, difficulty, height
+    WebSocketClosed, // WebSocket connection has been closed
+    Exit,            // all threads must stop
 }
 
-impl DeterministicRandom {
-    pub fn new(contract: &Hash, block: &Hash, transaction: &Hash) -> Self {
-        let reader = blake3::Hasher::new()
-            .update(contract.as_bytes())
-            .update(block.as_bytes())
-            .update(transaction.as_bytes())
-            .finalize_xof();
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SocketMessage {
+    NewJob(GetMinerWorkResult),
+    BlockAccepted,
+    BlockRejected(String),
+}
 
-        Self {
-            reader,
-        }
-    }
+// ========================
+// Wallet-related functions
+// ========================
 
-    pub fn fill(&mut self, buffer: &mut [u8]) -> Result<(), anyhow::Error> {
-        let pos = self.reader.position()
-            .checked_add(buffer.len() as u64)
-            .context("overflow")?;
-
-        if pos >= u64::MAX - 1 {
-            return Err(anyhow::anyhow!("2^64 - 1 bytes reached"));
+impl Wallet {
+    // Decrypt value loaded from disk
+    pub fn decrypt_value(&self, encrypted: &[u8]) -> anyhow::Result<Vec<u8>> {
+        if encrypted.len() < 25 {
+            return Err(WalletError::InvalidEncryptedValue.into());
         }
 
-        self.reader.fill(buffer);
+        let nonce = XNonce::from_slice(&encrypted[0..24]);
+        let mut decrypted = self.cipher
+            .decrypt(nonce, &encrypted[nonce.len()..])
+            .map_err(WalletError::CryptoError)?;
 
-        Ok(())
+        if let Some(salt) = &self.salt {
+            decrypted.drain(0..salt.len());
+        }
+
+        Ok(decrypted)
     }
 }
