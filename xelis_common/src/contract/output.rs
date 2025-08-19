@@ -80,7 +80,7 @@ impl Serializer for ContractOutput {
     fn read(reader: &mut Reader) -> Result<Self, ReaderError> {
         match reader.read_u8()? {
             0 => {
-                let amount = u64::read(reader)?;
+                let amount = u64::read(reader)?; // Or Amount::read(reader)?
                 Ok(ContractOutput::RefundGas { amount })
             },
             1 => {
@@ -103,11 +103,16 @@ impl Serializer for ContractOutput {
                 let asset = Hash::read(reader)?;
                 Ok(ContractOutput::NewAsset { asset })
             },
-            5 => Ok(ContractOutput::ExitCode(Option::read(reader)?)),
+            5 => {
+                let code = Option::read(reader)?; // confirm this matches your encoding
+                Ok(ContractOutput::ExitCode(code))
+            }
             6 => Ok(ContractOutput::RefundDeposits),
-            _ => Err(ReaderError::InvalidValue)
+            tag => Err(ReaderError::InvalidValue), // maybe attach `tag`
         }
     }
+}
+
 
     fn size(&self) -> usize {
         match self {
