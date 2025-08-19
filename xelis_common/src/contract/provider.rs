@@ -62,3 +62,4 @@ pub enum ContractProviderError {
 pub struct ContractProviderWrapper<'a, S: ContractProvider>(pub &'a mut S);
 
 tid! { impl<'a, S: 'static> TidAble<'a> for ContractProviderWrapper<'a, S> where S: ContractProvider }
+
