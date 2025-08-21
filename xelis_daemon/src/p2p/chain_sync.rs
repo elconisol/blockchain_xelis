@@ -151,23 +151,80 @@ impl<S: Storage> P2pServer<S> {
             }
             lowest_common_height = Some(lowest_height);
 
-            // now, lets check if peer is near to be synced, and send him alt tips blocks
-            if let Some(mut height) = unstable_height {
-                let top_height = self.blockchain.get_height();
-                trace!("unstable height: {}, top height: {}", height, top_height);
-                while height <= top_height && top_blocks.len() < CHAIN_SYNC_TOP_BLOCKS {
-                    trace!("get blocks at height {} for top blocks", height);
-                    for hash in storage.get_blocks_at_height(height).await? {
-                        if !response_blocks.contains(&hash) {
-                            trace!("Adding top block at height {}: {}", height, hash);
-                            top_blocks.insert(hash);
-                        } else {
-                            trace!("Top block at height {}: {} was skipped because its already present in response blocks", height, hash);
-                        }
-                    }
-                    height += 1;
+            use std::cmp::min;
+use std::collections::HashSet;
+
+// e.g., cap how far we scan from the first unstable height for this peer (anti-DoS / perf guard)
+const MAX_SYNC_SCAN_AHEAD: u64 = 10_000; // tune to your network
+
+// now, lets check if peer is near to be synced, and send him alt tips blocks
+if let Some(mut height) = unstable_height {
+    let top_height = self.blockchain.get_height();
+    trace!("unstable height: {}, top height: {}", height, top_height);
+
+    // If unstable height is already above tip, nothing to do
+    if height > top_height {
+        trace!("unstable height {} is above current tip {}; skipping", height, top_height);
+        // (Optionally) reset unstable height here if that’s your logic.
+    } else {
+        // Convert response_blocks to a set for O(1) membership tests
+        // If response_blocks is already a HashSet, drop this conversion.
+        let response_set: HashSet<_> = response_blocks.iter().cloned().collect();
+
+        let limit = CHAIN_SYNC_TOP_BLOCKS;
+        // Don’t scan an unbounded range
+        let end_height = min(top_height, height.saturating_add(MAX_SYNC_SCAN_AHEAD));
+
+        // Only loop while we still need more and haven’t reached our end
+        while height <= end_height && top_blocks.len() < limit {
+            trace!("collecting top blocks at height {}", height);
+
+            // One storage call per height; if this is hot, consider batching or an index
+            let hashes = storage.get_blocks_at_height(height).await?;
+            if hashes.is_empty() {
+                trace!("no blocks found at height {}", height);
+            }
+
+            for hash in hashes {
+                if top_blocks.len() >= limit {
+                    break;
+                }
+
+                if response_set.contains(&hash) {
+                    trace!(
+                        "skip top block at height {}: {} (already present in response)",
+                        height,
+                        hash
+                    );
+                    continue;
+                }
+
+                // Insert into the outgoing set; `HashSet::insert` returns false if already present
+                if top_blocks.insert(hash) {
+                    trace!("added top block at height {}: {}", height, hash);
+                } else {
+                    trace!(
+                        "duplicate top block at height {}: {} (already queued)",
+                        height,
+                        hash
+                    );
                 }
             }
+
+            height = height.saturating_add(1);
+        }
+
+        if height > end_height && top_blocks.len() < limit {
+            trace!(
+                "hit MAX_SYNC_SCAN_AHEAD ({} heights scanned), gathered {}/{} top blocks",
+                MAX_SYNC_SCAN_AHEAD,
+                top_blocks.len(),
+                limit
+            );
+        }
+    }
+}
+
         }
 
         debug!("Sending {} blocks & {} top blocks as response to {}", response_blocks.len(), top_blocks.len(), peer);
