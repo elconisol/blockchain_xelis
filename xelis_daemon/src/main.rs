@@ -163,89 +163,175 @@ pub struct CliConfig {
 const BLOCK_TIME: Difficulty = Difficulty::from_u64(BLOCK_TIME_MILLIS / MILLIS_PER_SECOND);
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    init();
+use std::{fs, fs::File, io::Write, path::{Path, PathBuf}};
+use anyhow::{Context, Result, bail};
+use tokio::signal;
+use tracing::{info, warn, error};
 
-    let mut config: CliConfig = CliConfig::parse();
-    if let Some(path) = config.config_file.as_ref() {
-        if config.generate_config_template {
-            if Path::new(path).exists() {
-                eprintln!("Config file already exists at {}", path);
-                return Ok(());
-            }
-
-            let mut file = File::create(path)
-                .context("Error while creating config file")?;
-            let json = serde_json::to_string_pretty(&config)
-                .context("Error while serializing config file")?;
-
-            file.write_all(json.as_bytes())
-                .context("Error while writing config file")?;
-
-            println!("Config file template generated at {}", path);
-            return Ok(());
-        }
-
-        let file = File::open(path)
-            .context("Error while opening config file")?;
-        config = serde_json::from_reader(file)
-            .context("Error while reading config file")?;
-    } else if config.generate_config_template {
-        eprintln!("Provided config file path is required to generate the template with --config-file");
+/// Prefer PathBuf joins over string suffix checks.
+/// Create parent dirs, write atomically, and avoid partial files on crash.
+fn write_config_template_atomically(path: &Path, config: &CliConfig) -> Result<()> {
+    if path.exists() {
+        eprintln!("Config file already exists at {}", path.display());
         return Ok(());
     }
 
-    let blockchain_config = &config.core;
-    if let Some(path) = blockchain_config.dir_path.as_ref() {
-        if !(path.ends_with("/") || path.ends_with("\\")) {
-            return Err(anyhow::anyhow!("Path must ends with / or \\"));
-        }
-
-        // If logs path is default, we will change it to be in the same directory as the blockchain
-        if config.log.logs_path == "logs/" {
-            config.log.logs_path = format!("{}logs/", path);
-        }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create parent directory {}", parent.display()))?;
     }
 
-    if blockchain_config.simulator.is_some() && config.network != Network::Dev {
+    let tmp = path.with_extension("tmp");
+    let json = serde_json::to_string_pretty(config)
+        .context("Error while serializing config file")?;
+    {
+        let mut file = File::create(&tmp)
+            .with_context(|| format!("Error while creating temporary config file {}", tmp.display()))?;
+        file.write_all(json.as_bytes())
+            .context("Error while writing config file")?;
+        // Ensure contents are flushed before rename.
+        file.sync_all().context("Failed to fsync temp config file")?;
+    }
+    fs::rename(&tmp, path)
+        .with_context(|| format!("Failed to atomically move {} to {}", tmp.display(), path.display()))?;
+
+    println!("Config file template generated at {}", path.display());
+    Ok(())
+}
+
+fn normalize_dir(dir: Option<String>) -> PathBuf {
+    match dir {
+        Some(s) if !s.trim().is_empty() => PathBuf::from(s),
+        _ => PathBuf::from(""),
+    }
+}
+
+/// Load and validate the CLI config (including config file reading and template generation).
+fn load_config() -> Result<CliConfig> {
+    let mut config: CliConfig = CliConfig::parse();
+
+    if let Some(path_str) = config.config_file.as_ref() {
+        let path = Path::new(path_str);
+
+        if config.generate_config_template {
+            write_config_template_atomically(path, &config)?;
+            // User asked only for generation; return early (no run).
+            // The caller can decide to exit cleanly.
+            return Ok(config);
+        }
+
+        let file = File::open(path)
+            .with_context(|| format!("Error while opening config file {}", path.display()))?;
+        config = serde_json::from_reader(file)
+            .with_context(|| format!("Error while reading config file {}", path.display()))?;
+    } else if config.generate_config_template {
+        eprintln!("Provided config file path is required to generate the template with --config-file");
+        // Return the current config so main can exit gracefully without running.
+        return Ok(config);
+    }
+
+    // Business rules / sanity validation
+    if config.core.simulator.is_some() && config.network != Network::Dev {
         config.network = Network::Dev;
-        warn!("Switching automatically to network {} because of simulator enabled", config.network);
+        warn!(
+            "Switching automatically to network {} because simulator is enabled",
+            config.network
+        );
     }
 
-    let log_config = &config.log;
-    let prompt = Prompt::new(
-        log_config.log_level,
-        &log_config.logs_path,
-        &log_config.filename_log,
-        log_config.disable_file_logging,
-        log_config.disable_file_log_date_based,
-        log_config.disable_log_color,
-        log_config.auto_compress_logs,
-        !log_config.disable_interactive_mode,
-        log_config.logs_modules.clone(),
-        log_config.file_log_level.unwrap_or(log_config.log_level)
-    )?;
+    // Paths: prefer platform joins; if user set a dir_path, use it as the base for logs if logs_path is default.
+    let core = &config.core;
+    let base_dir = normalize_dir(core.dir_path.clone());
+    if !base_dir.as_os_str().is_empty() {
+        // Create base dir if missing; don’t force trailing slash.
+        fs::create_dir_all(&base_dir)
+            .with_context(|| format!("Failed to create core directory {}", base_dir.display()))?;
 
+        if config.log.logs_path == "logs/" {
+            let logs = base_dir.join("logs");
+            fs::create_dir_all(&logs)
+                .with_context(|| format!("Failed to create logs directory {}", logs.display()))?;
+            // Normalize to forward-slash string for existing consumers, if needed.
+            config.log.logs_path = format!("{}/", logs.to_string_lossy());
+        }
+    }
+
+    Ok(config)
+}
+
+/// Build the Prompt with safer defaults.
+fn build_prompt(cfg: &CliConfig) -> Result<Prompt> {
+    let log = &cfg.log;
+    Prompt::new(
+        log.log_level,
+        &log.logs_path,
+        &log.filename_log,
+        log.disable_file_logging,
+        log.disable_file_log_date_based,
+        log.disable_log_color,
+        log.auto_compress_logs,
+        !log.disable_interactive_mode,
+        log.logs_modules.clone(),
+        log.file_log_level.unwrap_or(log.log_level),
+    )
+}
+
+/// Initialize storage with optional cache.
+fn build_storage(cfg: &CliConfig) -> Result<SledStorage> {
+    let core = &cfg.core;
+    let use_cache = if core.cache_size > 0 { Some(core.cache_size) } else { None };
+    let dir_path = core.dir_path.clone().unwrap_or_default();
+    SledStorage::new(
+        dir_path,
+        use_cache,
+        cfg.network,
+        cfg.internal_cache_size,
+        cfg.internal_db_mode,
+    )
+}
+
+async fn run_cli(prompt: Prompt, blockchain: Blockchain, cfg: CliConfig) -> Result<()> {
+    // Run the prompt and also listen for Ctrl-C for graceful shutdown.
+    tokio::select! {
+        res = run_prompt(prompt, blockchain.clone(), cfg) => {
+            if let Err(e) = res {
+                error!("Error while running prompt: {e}");
+            }
+        }
+        _ = signal::ctrl_c() => {
+            info!("Received Ctrl-C, starting graceful shutdown…");
+        }
+    }
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    init();
+
+    let config = load_config()?;
+
+    // If the user invoked `--generate-config-template` without a valid path, we already informed them.
+    // Exit cleanly without starting the node in those template-only paths.
+    if config.generate_config_template {
+        return Ok(());
+    }
+
+    let prompt = build_prompt(&config)?;
     info!("XELIS Blockchain running version: {}", VERSION);
     info!("----------------------------------------------");
 
-    let storage = {
-        let use_cache = if blockchain_config.cache_size > 0 {
-            Some(blockchain_config.cache_size)
-        } else {
-            None
-        };
+    let storage = build_storage(&config)?;
+    let blockchain = Blockchain::new(config.core.clone(), config.network, storage).await?;
 
-        let dir_path = blockchain_config.dir_path.clone().unwrap_or_default();
-        SledStorage::new(dir_path, use_cache, config.network, config.internal_cache_size, config.internal_db_mode)?
-    };
-
-    let blockchain = Blockchain::new(blockchain_config.clone(), config.network, storage).await?;
-    if let Err(e) = run_prompt(prompt, blockchain.clone(), config).await {
-        error!("Error while running prompt: {}", e);
+    if let Err(e) = run_cli(prompt, blockchain.clone(), config).await {
+        error!("Fatal error while running CLI: {e:?}");
     }
 
-    blockchain.stop().await;
+    // Ensure shutdown even if prompt failed or Ctrl-C fired.
+    if let Err(e) = blockchain.stop().await {
+        error!("Error during blockchain shutdown: {e:?}");
+    }
     Ok(())
 }
 
