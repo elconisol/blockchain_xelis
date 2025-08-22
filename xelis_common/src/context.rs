@@ -10,9 +10,23 @@ use anyhow::{Result, Context as AnyContext};
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NoOpHasher(u64);
 
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+    hash::{BuildHasher, Hasher},
+    hash::BuildHasherDefault,
+};
+
+// =====================
+// NoOp Hasher
+// =====================
+
+#[derive(Default)]
+pub struct NoOpHasher(u64);
+
 impl Hasher for NoOpHasher {
     fn write(&mut self, _: &[u8]) {
-        unimplemented!("This NoOpHasher can only handle u64s")
+        unimplemented!("This NoOpHasher can only handle u64s");
     }
 
     fn write_u64(&mut self, i: u64) {
@@ -23,6 +37,10 @@ impl Hasher for NoOpHasher {
         self.0
     }
 }
+
+// =====================
+// NoOp BuildHasher
+// =====================
 
 #[derive(Clone, Default)]
 pub struct NoOpBuildHasher;
@@ -35,9 +53,33 @@ impl BuildHasher for NoOpBuildHasher {
     }
 }
 
+// =====================
+// Context Using NoOpHash
+// =====================
+
 pub struct Context {
+    // Uses TypeId (which is already a u64 internally) as the key
     values: HashMap<TypeId, Box<dyn Any + Send + Sync>, BuildHasherDefault<NoOpHasher>>,
 }
+
+impl Context {
+    pub fn new() -> Self {
+        Self {
+            values: HashMap::default(),
+        }
+    }
+
+    pub fn insert<T: Any + Send + Sync>(&mut self, value: T) {
+        self.values.insert(TypeId::of::<T>(), Box::new(value));
+    }
+
+    pub fn get<T: Any + Send + Sync>(&self) -> Option<&T> {
+        self.values
+            .get(&TypeId::of::<T>())
+            .and_then(|boxed| boxed.downcast_ref::<T>())
+    }
+}
+
 
 impl Context {
     pub fn new() -> Self {
