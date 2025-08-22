@@ -227,7 +227,8 @@ pub struct Config {
 
 use serde::{Serialize, Deserialize};
 
-#[derive(Clone)]
+/// Notification sent to worker threads
+#[derive(Clone, Debug)]
 pub enum ThreadNotification<'a> {
     /// New mining job available for the worker thread
     NewJob {
@@ -242,13 +243,18 @@ pub enum ThreadNotification<'a> {
     Exit,
 }
 
+/// Messages exchanged over WebSocket
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SocketMessage {
+    /// A new job was received from the pool
     NewJob(GetMinerWorkResult),
+    /// A mined block was accepted
     BlockAccepted,
+    /// A mined block was rejected (reason provided)
     BlockRejected(String),
 }
+
 
 // Optional: conversion if relevant
 impl<'a> From<ThreadNotification<'a>> for Option<SocketMessage> {
