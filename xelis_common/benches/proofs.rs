@@ -87,7 +87,6 @@ fn bench_ciphertext_validity_proof(c: &mut Criterion) {
 
     group.bench_function("pre_verify", |b| {
         b.iter(|| {
-            // Verify the proof
             proof.pre_verify(
                 &commitment,
                 destination.get_public_key(),
