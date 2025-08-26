@@ -29,7 +29,6 @@ use xelis_common::{
 use xelis_vm::Environment;
 
 // Wrap a TX with its hash and size in bytes for faster access
-// size of tx can be heavy to compute, so we store it here
 #[derive(serde::Serialize)]
 pub struct SortedTx {
     tx: Arc<Transaction>,
