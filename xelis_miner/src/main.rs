@@ -77,40 +77,35 @@ use xelis_common::{
     }
 };
 use clap::Parser;
-use log::{
-    trace,
-    debug,
-    info,
-    warn,
-    error,
-};
-use anyhow::{
-    Result,
-    Error,
-    Context
-};
+use log::{trace, debug, info, warn, error};
+use anyhow::{Result, Error, Context};
 use lazy_static::lazy_static;
 
-// Functions helpers
+/// Returns the default daemon address
 fn default_daemon_address() -> String {
     DEFAULT_DAEMON_ADDRESS.to_owned()
 }
 
+/// Returns the default number of iterations for benchmarking or mining tasks
 fn default_iterations() -> usize {
     100
 }
 
+/// Returns the default log filename
 fn default_log_filename() -> String {
     "xelis-miner.log".to_owned()
 }
 
+/// Returns the default logs directory path
 fn default_logs_path() -> String {
     "logs/".to_owned()
 }
 
+/// Returns the default worker name
 fn default_worker_name() -> String {
     "default".to_owned()
 }
+
 
 #[derive(Parser, Serialize, Deserialize)]
 pub struct LogConfig {
