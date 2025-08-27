@@ -1,46 +1,42 @@
 pub mod config;
 
+use crate::config::DEFAULT_DAEMON_ADDRESS;
+
+// --- Standard Library ---
 use std::{
     fs::File,
     io::Write,
     path::Path,
     sync::{
-        atomic::{
-            AtomicBool,
-            AtomicU64,
-            AtomicUsize,
-            Ordering
-        },
-        RwLock
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        RwLock,
     },
     thread,
-    time::Duration
+    time::Duration,
 };
-use crate::config::DEFAULT_DAEMON_ADDRESS;
-use futures_util::{StreamExt, SinkExt};
-use serde::{Serialize, Deserialize};
+
+// --- Async / Tokio ---
 use tokio::{
     select,
-    sync::{
-        broadcast,
-        mpsc,
-        Mutex
-    },
+    sync::{broadcast, mpsc, Mutex},
     task::JoinHandle,
-    time::Instant
+    time::Instant,
 };
 #[cfg(feature = "api_stats")]
-use tokio::{
-    io::AsyncWriteExt,
-    net::TcpListener
-};
+use tokio::{io::AsyncWriteExt, net::TcpListener};
+
+// --- Futures ---
+use futures_util::{SinkExt, StreamExt};
+
+// --- WebSocket (tokio-tungstenite) ---
 use tokio_tungstenite::{
     connect_async,
-    tungstenite::{
-        Message,
-        Error as TungsteniteError
-    }
+    tungstenite::{Error as TungsteniteError, Message},
 };
+
+// --- Serialization ---
+use serde::{Deserialize, Serialize};
+
 use xelis_common::{
     api::daemon::{
         GetMinerWorkResult,
