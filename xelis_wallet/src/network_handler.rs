@@ -1,47 +1,43 @@
 use std::{
-    collections::{
-        HashMap,
-        HashSet
-    },
+    collections::{HashMap, HashSet},
     sync::Arc,
-    time::Duration
+    time::Duration,
 };
+
 use indexmap::IndexMap;
 use thiserror::Error;
 use anyhow::{Context, Error};
 use log::{debug, error, info, trace, warn};
+
 use xelis_common::{
     account::CiphertextCache,
     api::{
-        daemon::{
-            BlockResponse,
-            MultisigState,
-            NewBlockEvent
-        },
+        daemon::{BlockResponse, MultisigState, NewBlockEvent},
         wallet::BalanceChanged,
-        RPCTransactionType
+        RPCTransactionType,
     },
     config::XELIS_ASSET,
     crypto::{
         elgamal::Ciphertext,
         Address,
-        Hash
+        Hash,
     },
     tokio::{
         select,
         spawn_task,
         sync::Mutex,
         task::{JoinError, JoinHandle},
-        time::sleep
+        time::sleep,
     },
     transaction::{
         extra_data::{PlaintextExtraData, PlaintextFlag},
         ContractDeposit,
         MultiSigPayload,
-        Role
+        Role,
     },
-    utils::sanitize_daemon_address
+    utils::sanitize_daemon_address,
 };
+
 use crate::{
     config::AUTO_RECONNECT_INTERVAL,
     daemon_api::DaemonAPI,
