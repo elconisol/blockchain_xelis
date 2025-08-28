@@ -60,43 +60,29 @@ use xelis_common::{
 };
 use crate::{
     cipher::Cipher,
-    config::{
-        PASSWORD_ALGORITHM,
-        PASSWORD_HASH_SIZE,
-        SALT_SIZE
-    },
+    config::{PASSWORD_ALGORITHM, PASSWORD_HASH_SIZE, SALT_SIZE},
     entry::{EntryData, TransactionEntry as InnerTransactionEntry},
     error::WalletError,
     mnemonics,
     precomputed_tables::PrecomputedTablesShared,
-    storage::{
-        EncryptedStorage,
-        Storage
-    },
-    transaction_builder::{
-        EstimateFeesState,
-        TransactionBuilderState
-    }
+    storage::{EncryptedStorage, Storage},
+    transaction_builder::{EstimateFeesState, TransactionBuilderState},
 };
+
 #[cfg(feature = "network_handler")]
 use {
-    log::warn,
     crate::{
-        network_handler::{
-            NetworkHandler,
-            SharedNetworkHandler
-        },
         daemon_api::DaemonAPI,
+        network_handler::{NetworkHandler, SharedNetworkHandler},
         storage::Balance,
     },
+    log::warn,
     xelis_common::config::XELIS_ASSET,
 };
+
 use rand::{rngs::OsRng, RngCore};
-use log::{
-    debug,
-    error,
-    trace
-};
+use log::{debug, error, trace};
+
 
 #[cfg(feature = "api_server")]
 use {
