@@ -376,6 +376,7 @@ let (sender, _) = broadcast::channel::<ThreadNotification>(threads as usize);
 // MPSC channel for collecting mined work from all threads
 let (block_sender, block_receiver) = mpsc::channel::<MinerWork>(threads as usize);
 
+// Spawn mining worker threads
 for id in 0..threads {
     debug!("Starting mining thread #{}", id);
     if let Err(e) = start_thread(id, sender.subscribe(), block_sender.clone()) {
@@ -383,49 +384,50 @@ for id in 0..threads {
     }
 }
 
+// Start communication task
+let task = spawn_task(
+    "communication",
+    communication_task(
+        config.daemon_address,
+        sender.clone(),
+        block_receiver,
+        address,
+        config.worker,
+    ),
+);
 
-    // start communication task
-    let task = spawn_task("communication", communication_task(config.daemon_address, sender.clone(), block_receiver, address, config.worker));
-    
-    let stats_task: Option<JoinHandle<Result<()>>>;
+// Optional stats broadcaster task (behind `api_stats` feature)
+let stats_task: Option<JoinHandle<Result<()>>> = {
     #[cfg(feature = "api_stats")]
     {
-        // start stats task
-        stats_task = match config.api_bind_address {
+        match config.api_bind_address {
             Some(addr) => Some(spawn_task("broadcast", broadcast_stats_task(addr))),
             None => None,
-        };
+        }
     }
     #[cfg(not(feature = "api_stats"))]
     {
-        stats_task = None;
+        None
     }
+};
 
-    if let Err(e) = run_prompt(prompt).await {
-        error!("Error on running prompt: {}", e);
-    }
-
-    // send exit command to all threads to stop
-    if let Err(_) = sender.send(ThreadNotification::Exit) {
-        debug!("Error while sending exit message to threads");
-    }
-
-    // stop the communication task
-    task.abort();
-
-    // stop the stats broadcast task
-    if let Some(stats_handle) = stats_task {
-        stats_handle.abort()
-    }
-
-    Ok(())
+// Run interactive prompt loop
+if let Err(e) = run_prompt(prompt).await {
+    error!("Error while running prompt: {}", e);
 }
 
-use tokio::{
-    io::AsyncWriteExt,
-    net::TcpListener,
-};
-use log::info;
+// Graceful shutdown
+if sender.send(ThreadNotification::Exit).is_err() {
+    debug!("Error while sending exit message to threads");
+}
+
+// Stop the communication task
+task.abort();
+
+// Stop the stats broadcast task (if running)
+if let Some(stats_handle) = stats_task {
+    stats_handle.abort();
+}
 
 #[cfg(feature = "api_stats")]
 async fn broadcast_stats_task(broadcast_address: String) -> Result<(), Box<dyn std::error::Error>> {
