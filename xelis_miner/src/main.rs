@@ -266,21 +266,25 @@ static CURRENT_TOPO_HEIGHT: AtomicU64 = AtomicU64::new(0);
 static BLOCKS_FOUND: AtomicUsize = AtomicUsize::new(0);
 static BLOCKS_REJECTED: AtomicUsize = AtomicUsize::new(0);
 static HASHRATE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 #[cfg(feature = "api_stats")]
 static HASHRATE: AtomicU64 = AtomicU64::new(0);
-static JOB_ELAPSED: RwLock<Option<Instant>> = RwLock::new(None);
 
+static JOB_ELAPSED: RwLock<Option<Instant>> = RwLock::new(None);
 
 lazy_static! {
     static ref HASHRATE_LAST_TIME: Mutex<Instant> = Mutex::new(Instant::now());
 }
 
-// After how many iterations we update the timestamp of the block to avoid too much CPU usage 
+/// After how many iterations we update the timestamp of the block
+/// to avoid too much CPU usage
 const UPDATE_EVERY_NONCE: u64 = 10;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let mut config: Config = Config::parse();
+
+    // Handle config file logic
     if let Some(path) = config.config_file.as_ref() {
         if config.generate_config_template {
             if Path::new(path).exists() {
@@ -289,8 +293,10 @@ async fn main() -> Result<()> {
             }
 
             let mut file = File::create(path).context("Error while creating config file")?;
-            let json = serde_json::to_string_pretty(&config).context("Error while serializing config file")?;
-            file.write_all(json.as_bytes()).context("Error while writing config file")?;
+            let json =
+                serde_json::to_string_pretty(&config).context("Error while serializing config file")?;
+            file.write_all(json.as_bytes())
+                .context("Error while writing config file")?;
             println!("Config file template generated at {}", path);
             return Ok(());
         }
@@ -298,10 +304,14 @@ async fn main() -> Result<()> {
         let file = File::open(path).context("Error while opening config file")?;
         config = serde_json::from_reader(file).context("Error while reading config file")?;
     } else if config.generate_config_template {
-        eprintln!("Provided config file path is required to generate the template with --config-file");
+        eprintln!(
+            "Provided config file path is required to generate \
+             the template with --config-file"
+        );
         return Ok(());
     }
 
+    // Init logger / prompt
     let log = config.log;
     let prompt = Prompt::new(
         log.log_level,
@@ -313,8 +323,13 @@ async fn main() -> Result<()> {
         log.auto_compress_logs,
         !log.disable_interactive_mode,
         log.logs_modules,
-        log.file_log_level.unwrap_or(log.log_level)
+        log.file_log_level.unwrap_or(log.log_level),
     )?;
+
+    // ⬇️ rest of your async miner runtime would continue here…
+    Ok(())
+}
+
 
     // Prevent the user to block the program by selecting text in CLI
     #[cfg(target_os = "windows")]
