@@ -85,22 +85,24 @@ pub fn register_methods(handler: &mut RPCHandler<Arc<Wallet>>) {
     handler.register_method("query_db", async_handler!(query_db));
 }
 
-use serde_json::{json, Value};
+use serde_json::{Value};
 use std::sync::Arc;
+
 use crate::{
     rpc::InternalRpcError,
     wallet::Wallet,
     context::Context,
 };
 
-/// Utility: Ensure no params were passed in
-fn ensure_no_params(body: &Value) -> Result<(), InternalRpcError> {
+/// Utility: Ensure no parameters were passed to an RPC method
+pub fn ensure_no_params(body: &Value) -> Result<(), InternalRpcError> {
     if *body != Value::Null {
         Err(InternalRpcError::UnexpectedParams)
     } else {
         Ok(())
     }
 }
+
 
 /// Register all wallet-related RPC methods
 pub fn register_wallet_rpc_methods(registry: &mut RpcRegistry) {
