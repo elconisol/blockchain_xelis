@@ -366,65 +366,78 @@ if let Some(mut height) = unstable_height {
         // Packet verification ended, handle the chain response now
 
         let (mut blocks, top_blocks) = response.consume();
-        debug!("handling chain response from {}, {} blocks, {} top blocks, pop count {}", peer, blocks.len(), top_blocks.len(), pop_count);
+debug!(
+    "handling chain response from {}, {} blocks, {} top blocks, pop count {}",
+    peer,
+    blocks.len(),
+    top_blocks.len(),
+    pop_count
+);
 
-        let our_previous_topoheight = self.blockchain.get_topo_height();
-        let our_previous_height = self.blockchain.get_height();
-        let top_len = top_blocks.len();
-        let blocks_len = blocks.len();
+let our_previous_topoheight = self.blockchain.get_topo_height();
+let our_previous_height = self.blockchain.get_height();
+let blocks_len = blocks.len();
 
-        // merge both list together
-        blocks.extend(top_blocks);
+// merge both lists together
+blocks.extend(top_blocks);
 
-        if pop_count > 0 {
-            warn!("{} sent us a pop count request of {} with {} blocks", peer, pop_count, blocks_len);
+if pop_count > 0 {
+    warn!(
+        "{} sent us a pop count request of {} with {} blocks",
+        peer, pop_count, blocks_len
+    );
+}
+
+let peer_topoheight = peer.get_topoheight();
+
+// If node asks us to pop blocks, ensure peer is ahead
+if pop_count > 0
+    && peer_topoheight > our_previous_topoheight
+    && peer.get_height() >= our_previous_height
+    && (peer.is_priority() || !self.is_connected_to_a_synced_priority_node().await)
+{
+    if peer.is_priority() {
+        // Trust priority node fully
+        warn!(
+            "Rewinding chain without checking because {} is a priority node (pop count: {})",
+            peer, pop_count
+        );
+        self.blockchain.rewind_chain(pop_count, false).await?;
+    } else {
+        // Safety checks for non-priority peers
+        if pop_count > blocks_len as u64 {
+            warn!(
+                "{} sent us a pop count of {} but only {} blocks, ignoring",
+                peer, pop_count, blocks_len
+            );
+            return Err(P2pError::InvalidPopCount(pop_count, blocks_len as u64).into());
         }
 
-        // if node asks us to pop blocks, check that the peer's height/topoheight is in advance on us
-        let peer_topoheight = peer.get_topoheight();
-        if pop_count > 0
-            && peer_topoheight > our_previous_topoheight
-            && peer.get_height() >= our_previous_height
-            // then, verify if it's a priority node, otherwise, check if we are connected to a priority node so only him can rewind us
-            && (peer.is_priority() || !self.is_connected_to_a_synced_priority_node().await)
-        {
-            // check that if we can trust him
-            if peer.is_priority() {
-                warn!("Rewinding chain without checking because {} is a priority node (pop count: {})", peer, pop_count);
-                // User trust him as a priority node, rewind chain without checking, allow to go below stable height also
-                self.blockchain.rewind_chain(pop_count, false).await?;
-            } else {
-                // Verify that someone isn't trying to trick us
-                if pop_count > blocks_len as u64 {
-                    // TODO: maybe we could request its whole chain for comparison until chain validator has_higher_cumulative_difficulty ?
-                    // If after going through all its chain and we still have a higher cumulative difficulty, we should not rewind 
-                    warn!("{} sent us a pop count of {} but only sent us {} blocks, ignoring", peer, pop_count, blocks_len);
-                    return Err(P2pError::InvalidPopCount(pop_count, blocks_len as u64).into())
+        // Validate blocks by requesting headers
+        let mut futures = FuturesOrdered::new();
+        for hash in blocks {
+            trace!("Requesting block header for chain validator: {}", hash);
+
+            let fut = async {
+                if self.blockchain.has_block(&hash).await? {
+                    trace!("Already have block {}, skipping", hash);
+                    return Ok(None);
                 }
 
-                // request all blocks header and verify basic chain structure
-                // Starting topoheight must be the next topoheight after common block
-                // Blocks in chain response must be ordered by topoheight otherwise it will give incorrect results 
-                let mut futures = FuturesOrdered::new();
-                for hash in blocks {
-                    trace!("Request block header for chain validator: {}", hash);
-
-                    let fut = async {
-                        // check if we already have the block to not request it
-                        if self.blockchain.has_block(&hash).await? {
-                            trace!("We already have block {}, skipping", hash);
-                            return Ok(None)
-                        }
-    
-                        let response = peer.request_blocking_object(ObjectRequest::BlockHeader(hash)).await?;
-                        match response {
-                            OwnedObjectResponse::BlockHeader(header, hash) => Ok(Some((header, hash))),
-                            _ => Err(P2pError::ExpectedBlock(response))
-                        }
-                    };
-
-                    futures.push_back(fut);
+                let response = peer.request_blocking_object(ObjectRequest::BlockHeader(hash)).await?;
+                match response {
+                    OwnedObjectResponse::BlockHeader(header, hash) => Ok(Some((header, hash))),
+                    _ => Err(P2pError::ExpectedBlock(response)),
                 }
+            };
+
+            futures.push_back(fut);
+        }
+
+        // later: consume `futures` for validation
+    }
+}
+
 
                 let mut chain_validator = ChainValidator::new(&self.blockchain, common_topoheight + 1);
                 let mut exit_signal = self.exit_sender.subscribe();
