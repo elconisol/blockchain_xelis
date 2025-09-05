@@ -21,28 +21,41 @@ pub struct Signature {
 }
 
 impl Signature {
+    /// Construct a new signature from scalars `(s, e)`
     pub fn new(s: Scalar, e: Scalar) -> Self {
         Self { s, e }
     }
 
-    // Verify the signature using the Public Key and the hash of the message
+    /// Verify the signature against the given public key and message.
+    /// Returns `true` if valid, `false` otherwise.
     pub fn verify(&self, message: &[u8], key: &PublicKey) -> bool {
-        let r = PC_GENS.B_blinding * &self.s + key.as_point() * -self.e;
+        // Recompute R = s*B - e*P
+        let r = PC_GENS.B_blinding * &self.s - key.as_point() * self.e;
+
+        // Recompute challenge scalar
         let calculated = hash_and_point_to_scalar(&key.compress(), message, &r);
+
         self.e == calculated
     }
 }
 
-// Create a Scalar from Public Key, Hash of the message, and selected point
-pub fn hash_and_point_to_scalar(key: &CompressedPublicKey, message: &[u8], point: &RistrettoPoint) -> Scalar {
+/// Compute challenge scalar from `(pk, msg, R)`.
+pub fn hash_and_point_to_scalar(
+    key: &CompressedPublicKey,
+    message: &[u8],
+    point: &RistrettoPoint,
+) -> Scalar {
     let mut hasher = Sha3_512::new();
     hasher.update(key.as_bytes());
     hasher.update(message);
     hasher.update(point.compress().as_bytes());
 
     let hash = hasher.finalize();
-    Scalar::from_bytes_mod_order_wide(&hash.try_into().unwrap())
+
+    // Wide reduction ensures uniform scalar
+    Scalar::from_bytes_mod_order_wide(&hash[..64].try_into().expect("Sha3_512 is 64 bytes"))
 }
+
 
 impl Serialize for Signature {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
