@@ -610,51 +610,75 @@ async fn communication_task(daemon_address: String, job_sender: broadcast::Sende
     }
 }
 
-async fn handle_websocket_message(message: Result<Message, TungsteniteError>, job_sender: &broadcast::Sender<ThreadNotification<'_>>) -> Result<bool, Error> {
+async fn handle_websocket_message(
+    message: Result<Message, TungsteniteError>,
+    job_sender: &broadcast::Sender<ThreadNotification<'_>>,
+) -> Result<bool, Error> {
     match message? {
         Message::Text(text) => {
-            debug!("new message from daemon: {}", text);
-            match serde_json::from_slice::<SocketMessage>(text.as_bytes())? {
-                SocketMessage::NewJob(job) => {
-                    info!("New job received: difficulty {} at height {}", format_difficulty(job.difficulty), job.height);
-                    let block = MinerWork::from_hex(&job.miner_work).context("Error while decoding new job received from daemon")?;
-                    CURRENT_TOPO_HEIGHT.store(job.topoheight, Ordering::SeqCst);
-                    JOB_ELAPSED.write().unwrap().replace(Instant::now());
+            debug!("Received new WebSocket message: {}", text);
 
-                    if let Err(e) = job_sender.send(ThreadNotification::NewJob(job.algorithm, block, job.difficulty, job.height)) {
-                        error!("Error while sending new job to threads: {}", e);
+            match serde_json::from_slice::<SocketMessage>(text.as_bytes()) {
+                Ok(SocketMessage::NewJob(job)) => {
+                    info!(
+                        "New job: difficulty={} height={}",
+                        format_difficulty(job.difficulty),
+                        job.height
+                    );
+
+                    let block = MinerWork::from_hex(&job.miner_work)
+                        .context("Failed to decode miner work from daemon")?;
+
+                    CURRENT_TOPO_HEIGHT.store(job.topoheight, Ordering::SeqCst);
+                    JOB_ELAPSED
+                        .write()
+                        .unwrap()
+                        .replace(Instant::now());
+
+                    if let Err(e) = job_sender.send(ThreadNotification::NewJob(
+                        job.algorithm,
+                        block,
+                        job.difficulty,
+                        job.height,
+                    )) {
+                        error!("Failed to send new job to mining threads: {}", e);
                     }
-                },
-                SocketMessage::BlockAccepted => {
+                }
+                Ok(SocketMessage::BlockAccepted) => {
                     BLOCKS_FOUND.fetch_add(1, Ordering::SeqCst);
-                    info!("Block submitted has been accepted by network !");
-                },
-                SocketMessage::BlockRejected(err) => {
+                    info!("Block accepted by network.");
+                }
+                Ok(SocketMessage::BlockRejected(err)) => {
                     BLOCKS_REJECTED.fetch_add(1, Ordering::SeqCst);
-                    error!("Block submitted has been rejected by network: {}", err);
+                    error!("Block rejected by network: {}", err);
+                }
+                Err(e) => {
+                    error!("Failed to deserialize WebSocket message: {}", e);
                 }
             }
-        },
-        Message::Close(reason) => {
-            let reason: String = if let Some(reason) = reason {
-                reason.to_string()
-            } else {
-                "No reason".into()
-            };
-            warn!("Daemon has closed the WebSocket connection with us: {}", reason);
-            return Ok(true);
-        },
-        Message::Ping(_) => {
-            trace!("received ping");
-        },
-        msg => {
-            warn!("Unexpected message from WebSocket: {:?}", msg);
-            return Ok(true);
         }
-    };
+        Message::Close(reason) => {
+            let reason = reason
+                .map(|r| r.to_string())
+                .unwrap_or_else(|| "No reason provided".to_string());
+            warn!("Daemon closed WebSocket connection: {}", reason);
+            return Ok(true); // signal connection should stop
+        }
+        Message::Ping(_) => {
+            trace!("Received ping from daemon.");
+        }
+        Message::Pong(_) => {
+            trace!("Received pong from daemon."); // optional: keep-alive logging
+        }
+        other => {
+            warn!("Unexpected WebSocket message: {:?}", other);
+            return Ok(true); // stop loop on unknown messages
+        }
+    }
 
     Ok(false)
 }
+
 
 fn start_thread(id: u16, mut job_receiver: broadcast::Receiver<ThreadNotification<'static>>, block_sender: mpsc::Sender<MinerWork<'static>>) -> Result<(), Error> {
     let builder = thread::Builder::new().name(format!("Mining Thread #{}", id));
