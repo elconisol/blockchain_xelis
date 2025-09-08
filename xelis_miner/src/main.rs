@@ -335,28 +335,41 @@ async fn main() -> Result<()> {
     #[cfg(target_os = "windows")]
     prompt.adjust_win_console()?;
 
-    let detected_threads = match thread::available_parallelism() {
-        Ok(value) => value.get() as u16,
-        Err(e) => {
-            warn!("Couldn't detect number of available threads: {}, fallback to 1 thread only", e);
-            1
-        }
-    };
+// Detect number of available CPU threads
+let detected_threads = thread::available_parallelism()
+    .map(|n| n.get() as u16)
+    .unwrap_or_else(|e| {
+        warn!(
+            "Unable to detect available CPU threads: {}. Defaulting to 1 thread.",
+            e
+        );
+        1
+    });
 
-    let threads = match config.num_threads {
-        Some(value) => value,
-        None => detected_threads
-    };
+// Determine threads to use: user-defined or auto-detected
+let threads = config.num_threads.unwrap_or(detected_threads);
 
+info!(
+    "Miner will run with {} threads (detected available threads: {})",
+    threads, detected_threads
+);
 
-    info!("Total threads to use: {} (detected: {})", threads, detected_threads);
+// Run benchmark if requested
+if let Some(algorithm) = config.benchmark.benchmark {
+    info!(
+        "Benchmark mode enabled. Testing up to {} threads with algorithm: {:?}",
+        threads, algorithm
+    );
 
-    if let Some(algorithm) = config.benchmark.benchmark {
-        info!("Benchmark mode enabled, miner will try up to {} threads", threads);
-        benchmark(threads as usize, config.benchmark.iterations, algorithm);
-        info!("Benchmark finished");
-        return Ok(())
-    }
+    benchmark(
+        threads as usize,
+        config.benchmark.iterations,
+        algorithm,
+    );
+
+    info!("Benchmark completed successfully.");
+    return Ok(());
+}
 
 let address = config
     .miner_address
