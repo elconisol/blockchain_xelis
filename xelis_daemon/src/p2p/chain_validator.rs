@@ -333,41 +333,57 @@ impl<S: Storage> DagOrderProvider for ChainValidatorProvider<'_, S> {
 #[async_trait]
 impl<S: Storage> BlocksAtHeightProvider for ChainValidatorProvider<'_, S> {
     async fn has_blocks_at_height(&self, height: u64) -> Result<bool, BlockchainError> {
-        trace!("has block at height {}", height);
+        trace!("Checking if blocks exist at height {}", height);
+
         if self.parent.blocks_at_height.contains_key(&height) {
-            return Ok(true)
+            trace!("Cache hit: blocks found in parent at height {}", height);
+            return Ok(true);
         }
 
-        trace!("fallback on storage for has_blocks_at_height");
+        trace!("Cache miss: querying storage for blocks at height {}", height);
         self.storage.has_blocks_at_height(height).await
     }
 
-    // Retrieve the blocks hashes at a specific height
     async fn get_blocks_at_height(&self, height: u64) -> Result<IndexSet<Hash>, BlockchainError> {
-        trace!("get blocks at height {}", height);
-        if let Some(tips) = self.parent.blocks_at_height.get(&height) {
-            return Ok(tips.clone())
+        trace!("Retrieving blocks at height {}", height);
+
+        if let Some(blocks) = self.parent.blocks_at_height.get(&height) {
+            trace!("Cache hit: {} blocks found at height {}", blocks.len(), height);
+            return Ok(blocks.clone());
         }
 
-        trace!("fallback on storage for get_blocks_at_height");
+        trace!("Cache miss: querying storage for blocks at height {}", height);
         self.storage.get_blocks_at_height(height).await
     }
 
-    // This is used to store the blocks hashes at a specific height
-    async fn set_blocks_at_height(&mut self, _: IndexSet<Hash>, _: u64) -> Result<(), BlockchainError> {
+    async fn set_blocks_at_height(
+        &mut self,
+        _: IndexSet<Hash>,
+        _: u64,
+    ) -> Result<(), BlockchainError> {
+        trace!("Attempted to call set_blocks_at_height, but this operation is unsupported");
         Err(BlockchainError::UnsupportedOperation)
     }
 
-    // Append a block hash at a specific height
-    async fn add_block_hash_at_height(&mut self, _: Hash, _: u64) -> Result<(), BlockchainError> {
+    async fn add_block_hash_at_height(
+        &mut self,
+        _: Hash,
+        _: u64,
+    ) -> Result<(), BlockchainError> {
+        trace!("Attempted to call add_block_hash_at_height, but this operation is unsupported");
         Err(BlockchainError::UnsupportedOperation)
     }
 
-    // Remove a block hash at a specific height
-    async fn remove_block_hash_at_height(&mut self, _: &Hash, _: u64) -> Result<(), BlockchainError> {
+    async fn remove_block_hash_at_height(
+        &mut self,
+        _: &Hash,
+        _: u64,
+    ) -> Result<(), BlockchainError> {
+        trace!("Attempted to call remove_block_hash_at_height, but this operation is unsupported");
         Err(BlockchainError::UnsupportedOperation)
     }
 }
+
 
 #[async_trait]
 impl<S: Storage> PrunedTopoheightProvider for ChainValidatorProvider<'_, S> {
