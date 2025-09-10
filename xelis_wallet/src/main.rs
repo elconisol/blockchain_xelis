@@ -689,40 +689,60 @@ async fn setup_wallet_command_manager(wallet: Arc<Wallet>, command_manager: &Com
 }
 
 // Function passed as param to prompt to build the prompt message shown
-async fn prompt_message_builder(prompt: &Prompt, command_manager: Option<&CommandManager>) -> Result<String, PromptError> {
+// -------------------- Prompt Builder --------------------
+async fn prompt_message_builder(
+    prompt: &Prompt,
+    command_manager: Option<&CommandManager>
+) -> Result<String, PromptError> {
     if let Some(manager) = command_manager {
         let context = manager.get_context().lock()?;
         if let Ok(wallet) = context.get::<Arc<Wallet>>() {
             let network = wallet.get_network();
 
+            // short address preview
             let addr_str = {
                 let addr = &wallet.get_address().to_string()[..8];
                 prompt.colorize_string(Color::Yellow, addr)
             };
-    
+
+            // topoheight and balance from storage
             let storage = wallet.get_storage().read().await;
             let topoheight_str = format!(
                 "{}: {}",
                 prompt.colorize_string(Color::Yellow, "TopoHeight"),
-                prompt.colorize_string(Color::Green, &format!("{}", storage.get_synced_topoheight().unwrap_or(0)))
+                prompt.colorize_string(
+                    Color::Green,
+                    &format!("{}", storage.get_synced_topoheight().unwrap_or(0))
+                )
             );
             let balance = format!(
                 "{}: {}",
                 prompt.colorize_string(Color::Yellow, "Balance"),
-                prompt.colorize_string(Color::Green, &format_xelis(storage.get_plaintext_balance_for(&XELIS_ASSET).await.unwrap_or(0))),
+                prompt.colorize_string(
+                    Color::Green,
+                    &format_xelis(
+                        storage.get_plaintext_balance_for(&XELIS_ASSET)
+                            .await
+                            .unwrap_or(0)
+                    ),
+                ),
             );
+
+            // online/offline status
             let status = if wallet.is_online().await {
                 prompt.colorize_string(Color::Green, "Online")
             } else {
                 prompt.colorize_string(Color::Red, "Offline")
             };
+
+            // show network if not mainnet
             let network_str = if !network.is_mainnet() {
                 format!(
                     "{} ",
                     prompt.colorize_string(Color::Red, &network.to_string())
                 )
             } else { "".into() };
-    
+
             return Ok(
                 format!(
                     "{} | {} | {} | {} | {} {}{} ",
@@ -738,6 +758,7 @@ async fn prompt_message_builder(prompt: &Prompt, command_manager: Option<&Comman
         }
     }
 
+    // fallback if no wallet context
     Ok(
         format!(
             "{} {} ",
@@ -746,6 +767,7 @@ async fn prompt_message_builder(prompt: &Prompt, command_manager: Option<&Comman
         )
     )
 }
+
 
 // Open a wallet based on the wallet name and its password
 async fn open_wallet(manager: &CommandManager, _: ArgumentManager) -> Result<(), CommandError> {
