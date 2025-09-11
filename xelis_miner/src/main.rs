@@ -568,37 +568,57 @@ async fn communication_task(daemon_address: String, job_sender: broadcast::Sende
                 continue 'main;
             }
         };
-        WEBSOCKET_CONNECTED.store(true, Ordering::SeqCst);
-        info!("Connected successfully to {}", daemon_address);
-        let (mut write, mut read) = client.split();
-        loop {
-            select! {
-                Some(message) = read.next() => { // read all messages from daemon
-                    debug!("Received message from daemon: {:?}", message);
-                    match handle_websocket_message(message, &job_sender).await {
-                        Ok(exit) => {
-                            if exit {
-                                debug!("Exiting communication task");
-                                break;
-                            }
-                        },
-                        Err(e) => {
-                            error!("Error while handling message from WebSocket: {}", e);
+        async fn communication_task(
+    daemon_address: String,
+    job_sender: broadcast::Sender<ThreadNotification<'_>>,
+    mut block_receiver: mpsc::Receiver<MinerWork>,
+    address: Address,
+    worker: String,
+) -> Result<()> {
+    info!("Connecting to daemon at {}", daemon_address);
+    let url = format!("ws://{}", daemon_address);
+
+    let (client, _) = connect_async(&url).await.context("Failed to connect to daemon")?;
+    WEBSOCKET_CONNECTED.store(true, Ordering::SeqCst);
+    info!("Connected successfully to {}", daemon_address);
+
+    let (mut write, mut read) = client.split();
+
+    loop {
+        select! {
+            // read messages from daemon
+            Some(message) = read.next() => {
+                debug!("Received message from daemon: {:?}", message);
+                match handle_websocket_message(message, &job_sender).await {
+                    Ok(exit) => {
+                        if exit {
+                            debug!("Exiting communication task");
                             break;
                         }
-                    }
-                },
-                Some(work) = block_receiver.recv() => { // send all valid blocks found to the daemon
-                    info!("submitting new block found...");
-                    let submit = serde_json::json!(SubmitMinerWorkParams { miner_work: work.to_hex() }).to_string();
-                    if let Err(e) = write.send(Message::Text(submit)).await {
-                        error!("Error while sending the block found to the daemon: {}", e);
+                    },
+                    Err(e) => {
+                        error!("Error while handling message from WebSocket: {}", e);
                         break;
                     }
-                    debug!("Block found has been sent to daemon");
                 }
+            },
+
+            // send mined blocks to daemon
+            Some(work) = block_receiver.recv() => {
+                info!("Submitting new block found...");
+                let submit = serde_json::json!(SubmitMinerWorkParams { miner_work: work.to_hex() }).to_string();
+                if let Err(e) = write.send(Message::Text(submit)).await {
+                    error!("Error while sending the block found to the daemon: {}", e);
+                    break;
+                }
+                debug!("Block found has been sent to daemon");
             }
         }
+    }
+
+    Ok(())
+}
+
 
         WEBSOCKET_CONNECTED.store(false, Ordering::SeqCst);
         if job_sender.send(ThreadNotification::WebSocketClosed).is_err() {
