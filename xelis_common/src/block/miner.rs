@@ -46,6 +46,15 @@ pub enum Algorithm {
     V2 = 1
 }
 
+use std::str::FromStr;
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Algorithm {
+    V1,
+    V2,
+}
+
 impl FromStr for Algorithm {
     type Err = &'static str;
 
@@ -53,23 +62,39 @@ impl FromStr for Algorithm {
         match s {
             "xel/v1" => Ok(Algorithm::V1),
             "xel/v2" => Ok(Algorithm::V2),
-            _ => Err("invalid algorithm")
+            _ => Err("invalid algorithm"),
+        }
+    }
+}
+
+impl ToString for Algorithm {
+    fn to_string(&self) -> String {
+        match self {
+            Algorithm::V1 => "xel/v1".to_string(),
+            Algorithm::V2 => "xel/v2".to_string(),
         }
     }
 }
 
 impl Serialize for Algorithm {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
         self.to_string().serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for Algorithm {
-    fn deserialize<D>(deserializer: D) -> Result<Algorithm, D::Error> where D: serde::Deserializer<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Algorithm, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
         let s = String::deserialize(deserializer)?;
         Algorithm::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
+
 
 impl fmt::Display for Algorithm {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
