@@ -285,7 +285,7 @@ impl<S: Storage> DagOrderProvider for ChainValidatorProvider<'_, S> {
     async fn get_topo_height_for_hash(&self, hash: &Hash) -> Result<TopoHeight, BlockchainError> {
         trace!("get topo height for hash {}", hash);
         if let Some(index) = self.parent.blocks.get_index_of(hash) {
-            return Ok(self.parent.starting_topoheight + index as TopoHeight)
+            return Ok(self.parent.starting_topoheight + index as TopoHeight);
         }
 
         trace!("fallback on storage for get_topo_height_for_hash");
@@ -293,14 +293,18 @@ impl<S: Storage> DagOrderProvider for ChainValidatorProvider<'_, S> {
     }
 
     // This should never happen in our case
-    async fn set_topo_height_for_block(&mut self, _: &Hash, _: TopoHeight) -> Result<(), BlockchainError> {
+    async fn set_topo_height_for_block(
+        &mut self,
+        _: &Hash,
+        _: TopoHeight,
+    ) -> Result<(), BlockchainError> {
         Err(BlockchainError::UnsupportedOperation)
     }
 
     async fn is_block_topological_ordered(&self, hash: &Hash) -> bool {
         trace!("is block topological ordered {}", hash);
         if self.parent.blocks.contains_key(hash) {
-            return true
+            return true;
         }
 
         trace!("fallback on storage for is_block_topological_ordered");
@@ -311,7 +315,11 @@ impl<S: Storage> DagOrderProvider for ChainValidatorProvider<'_, S> {
         trace!("get hash at topoheight {}", topoheight);
         if topoheight >= self.parent.starting_topoheight {
             let index = (topoheight - self.parent.starting_topoheight) as usize;
-            return self.parent.blocks.get_index(index).map(|(hash, _)| hash.clone()).ok_or(BlockchainError::BlockNotOrdered);
+            return self.parent
+                .blocks
+                .get_index(index)
+                .map(|(hash, _)| hash.clone())
+                .ok_or(BlockchainError::BlockNotOrdered);
         }
 
         trace!("fallback on storage for get_hash_at_topo_height");
@@ -322,13 +330,14 @@ impl<S: Storage> DagOrderProvider for ChainValidatorProvider<'_, S> {
         trace!("has hash at topoheight {}", topoheight);
         if topoheight >= self.parent.starting_topoheight {
             let index = (topoheight - self.parent.starting_topoheight) as usize;
-            return Ok(self.parent.blocks.get_index(index).is_some())
+            return Ok(self.parent.blocks.get_index(index).is_some());
         }
 
         trace!("fallback on storage for has_hash_at_topoheight");
         self.storage.has_hash_at_topoheight(topoheight).await
     }
 }
+
 
 #[async_trait]
 impl<S: Storage> BlocksAtHeightProvider for ChainValidatorProvider<'_, S> {
