@@ -781,40 +781,63 @@ impl Wallet {
         }
 
         // Get all balances used
-        for asset in used_assets {
-            trace!("Checking balance for asset {}", asset);
-            if state.has_balance_for(&asset) {
-                trace!("Already have balance for asset {} in state", asset);
-                continue;
-            }
-
-            if !storage.has_balance_for(&asset).await? {
-                return Err(WalletError::BalanceNotFound(asset.clone()));
-            }
-
-            let (balance, unconfirmed) = storage.get_unconfirmed_balance_for(&asset).await?;
-            debug!("Using balance (unconfirmed: {}) for asset {} with amount {}, ciphertext: {}", unconfirmed, asset, balance.amount, balance.ciphertext);
-            state.add_balance(asset.clone(), balance);
+        impl<S: Storage> DagOrderProvider for ChainValidatorProvider<'_, S> {
+    async fn get_topo_height_for_hash(&self, hash: &Hash) -> Result<TopoHeight, BlockchainError> {
+        trace!("get topo height for hash {}", hash);
+        if let Some(index) = self.parent.blocks.get_index_of(hash) {
+            return Ok(self.parent.starting_topoheight + index as TopoHeight);
         }
 
-        Ok(state)
+        trace!("fallback on storage for get_topo_height_for_hash");
+        self.storage.get_topo_height_for_hash(hash).await
     }
 
-    // Create the transaction with all needed parameters
-    pub fn create_transaction_with(&self, state: &mut TransactionBuilderState, threshold: Option<u8>, tx_version: TxVersion, transaction_type: TransactionTypeBuilder, fee: FeeBuilder) -> Result<Transaction, WalletError> {
-        // Create the transaction builder
-        let builder = TransactionBuilder::new(tx_version, self.get_public_key().clone(), threshold, transaction_type, fee);
-
-        // Build the final transaction
-        let transaction = builder.build(state, &self.inner.keypair)
-            .map_err(|e| WalletError::Any(e.into()))?;
-
-        let tx_hash = transaction.hash();
-        debug!("Transaction created: {} with nonce {} and reference {}", tx_hash, transaction.get_nonce(), transaction.get_reference());
-        state.set_tx_hash_built(tx_hash);
-
-        Ok(transaction)
+    // This should never happen in our case
+    async fn set_topo_height_for_block(
+        &mut self,
+        _: &Hash,
+        _: TopoHeight,
+    ) -> Result<(), BlockchainError> {
+        Err(BlockchainError::UnsupportedOperation)
     }
+
+    async fn is_block_topological_ordered(&self, hash: &Hash) -> bool {
+        trace!("is block topological ordered {}", hash);
+        if self.parent.blocks.contains_key(hash) {
+            return true;
+        }
+
+        trace!("fallback on storage for is_block_topological_ordered");
+        self.storage.is_block_topological_ordered(hash).await
+    }
+
+    async fn get_hash_at_topo_height(&self, topoheight: TopoHeight) -> Result<Hash, BlockchainError> {
+        trace!("get hash at topoheight {}", topoheight);
+        if topoheight >= self.parent.starting_topoheight {
+            let index = (topoheight - self.parent.starting_topoheight) as usize;
+            return self.parent
+                .blocks
+                .get_index(index)
+                .map(|(hash, _)| hash.clone())
+                .ok_or(BlockchainError::BlockNotOrdered);
+        }
+
+        trace!("fallback on storage for get_hash_at_topo_height");
+        self.storage.get_hash_at_topo_height(topoheight).await
+    }
+
+    async fn has_hash_at_topoheight(&self, topoheight: TopoHeight) -> Result<bool, BlockchainError> {
+        trace!("has hash at topoheight {}", topoheight);
+        if topoheight >= self.parent.starting_topoheight {
+            let index = (topoheight - self.parent.starting_topoheight) as usize;
+            return Ok(self.parent.blocks.get_index(index).is_some());
+        }
+
+        trace!("fallback on storage for has_hash_at_topoheight");
+        self.storage.has_hash_at_topoheight(topoheight).await
+    }
+}
+
 
     // Create an unsigned transaction with the given transaction type and fee
     pub fn create_unsigned_transaction(&self, state: &mut TransactionBuilderState, threshold: Option<u8>, transaction_type: TransactionTypeBuilder, fee: FeeBuilder, tx_version: TxVersion) -> Result<UnsignedTransaction, WalletError> {
