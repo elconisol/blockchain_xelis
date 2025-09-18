@@ -383,7 +383,7 @@ if threads != detected_threads {
     );
 }
 
-// Broadcast channel for sending jobs or exit notifications to all threads
+// Broadcast channel for thread notifications
 let (sender, _) = broadcast::channel::<ThreadNotification>(threads as usize);
 
 // MPSC channel for collecting mined work from all threads
@@ -397,7 +397,7 @@ for id in 0..threads {
     }
 }
 
-// Start communication task
+// Start communication task with daemon
 let task = spawn_task(
     "communication",
     communication_task(
@@ -408,6 +408,7 @@ let task = spawn_task(
         config.worker,
     ),
 );
+
 
 // Optional stats broadcaster task (behind `api_stats` feature)
 let stats_task: Option<JoinHandle<Result<()>>> = {
