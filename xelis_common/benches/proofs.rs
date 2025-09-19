@@ -68,37 +68,48 @@ fn bench_commitment_eq_proof(c: &mut Criterion) {
 fn bench_ciphertext_validity_proof(c: &mut Criterion) {
     let mut group = c.benchmark_group("ciphertext_validity_proof");
 
+    // Generate source and destination key pairs
     let destination = KeyPair::new();
     let source = KeyPair::new();
 
-    // Generate the commitment representing the transfer amount
+    // Generate Pedersen commitment representing the transfer amount
     let amount = 5u64;
     let opening = PedersenOpening::generate_new();
     let commitment = PedersenCommitment::new_with_opening(amount, &opening);
 
-    // Create the receiver handle
+    // Create receiver and sender handles
     let receiver_handle = destination.get_public_key().decrypt_handle(&opening);
-    // Create the sender handle
     let sender_handle = source.get_public_key().decrypt_handle(&opening);
 
     // Generate the proof
     let mut transcript = Transcript::new(b"test");
-    let proof = CiphertextValidityProof::new(destination.get_public_key(), Some(source.get_public_key()), amount, &opening, &mut transcript);
+    let proof = CiphertextValidityProof::new(
+        destination.get_public_key(),
+        Some(source.get_public_key()),
+        amount,
+        &opening,
+        &mut transcript,
+    );
 
+    // Benchmark pre-verification
     group.bench_function("pre_verify", |b| {
         b.iter(|| {
-            proof.pre_verify(
-                &commitment,
-                destination.get_public_key(),
-                source.get_public_key(),
-                &receiver_handle,
-                &sender_handle,
-                true,
-                &mut Transcript::new(b"test"),
-                &mut BatchCollector::default(),
-            ).expect("Failed to verify proof");
+            proof
+                .pre_verify(
+                    &commitment,
+                    destination.get_public_key(),
+                    source.get_public_key(),
+                    &receiver_handle,
+                    &sender_handle,
+                    true,
+                    &mut Transcript::new(b"test"),
+                    &mut BatchCollector::default(),
+                )
+                .expect("Failed to verify proof");
         })
     });
+}
+
 
     group.bench_function("verify", |b| {
         b.iter(|| {
