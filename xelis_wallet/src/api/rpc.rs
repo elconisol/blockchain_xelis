@@ -469,30 +469,54 @@ async fn build_transaction_offline(context: &Context, body: Value) -> Result<Val
     }))
 }
 
-async fn build_unsigned_transaction(context: &Context, body: Value) -> Result<Value, InternalRpcError> {
+async fn build_unsigned_transaction(
+    context: &Context,
+    body: Value,
+) -> Result<Value, InternalRpcError> {
+    // Parse input parameters
     let params: BuildUnsignedTransactionParams = parse_params(body)?;
     let wallet: &Arc<Wallet> = context.get()?;
 
-    // create the TX
-    // The lock is kept until the TX is applied to the storage
-    // So even if we have few requests building a TX, they wait for the previous one to be applied
+    // Create the transaction state
+    // Lock is held until the transaction is applied to storage
+    // Ensures multiple TX requests wait in sequence
     let mut storage = wallet.get_storage().write().await;
     let fee = params.fee.unwrap_or_default();
-    let mut state = wallet.create_transaction_state_with_storage(&storage, &params.tx_type, &fee, params.nonce).await?;
+    let mut state = wallet
+        .create_transaction_state_with_storage(
+            &storage,
+            &params.tx_type,
+            &fee,
+            params.nonce,
+        )
+        .await?;
 
     let version = storage.get_tx_version().await?;
-    let threshold = storage.get_multisig_state().await?
+    let threshold = storage
+        .get_multisig_state()
+        .await?
         .map(|state| state.payload.threshold);
 
-    // Generate the TX
-    let builder = TransactionBuilder::new(version, wallet.get_public_key().clone(), threshold, params.tx_type, fee);
-    let unsigned = builder.build_unsigned(&mut state, wallet.get_keypair())
+    // Build the unsigned transaction
+    let builder = TransactionBuilder::new(
+        version,
+        wallet.get_public_key().clone(),
+        threshold,
+        params.tx_type,
+        fee,
+    );
+
+    let unsigned = builder
+        .build_unsigned(&mut state, wallet.get_keypair())
         .context("Error while building unsigned transaction")?;
 
-    state.apply_changes(&mut storage).await
+    // Apply changes to storage
+    state
+        .apply_changes(&mut storage)
+        .await
         .context("Error while applying state changes")?;
 
-    // returns the created TX and its hash
+    // Return unsigned TX and hash
     Ok(json!(UnsignedTransactionResponse {
         tx_as_hex: if params.tx_as_hex {
             Some(hex::encode(unsigned.to_bytes()))
@@ -504,6 +528,7 @@ async fn build_unsigned_transaction(context: &Context, body: Value) -> Result<Va
         threshold
     }))
 }
+
 
 // Finalize an unsigned transaction by signing it
 // Add the signatures to the transaction if a multisig is set
