@@ -723,67 +723,87 @@ fn start_thread(id: u16, mut job_receiver: broadcast::Receiver<ThreadNotificatio
             };
 
             match message {
-                ThreadNotification::WebSocketClosed => {
-                    // wait until we receive a new job, check every 100ms
-                    while job_receiver.is_empty() {
-                        thread::sleep(Duration::from_millis(100));
+    ThreadNotification::WebSocketClosed => {
+        // Wait until we receive a new job, check every 100ms
+        while job_receiver.is_empty() {
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    ThreadNotification::Exit => {
+        info!("Exiting Mining Thread #{}...", id);
+        break 'main;
+    }
+
+    ThreadNotification::NewJob(algorithm, mut new_job, expected_difficulty, height) => {
+        debug!("Mining Thread #{} received a new job", id);
+
+        // Set thread ID in extra nonce to spread work between threads
+        new_job.set_thread_id_u16(id);
+
+        let initial_timestamp = new_job.get_timestamp();
+        worker.set_work(new_job, algorithm).unwrap();
+
+        // Compute difficulty target
+        let difficulty_target = match compute_difficulty_target(&expected_difficulty) {
+            Ok(value) => value,
+            Err(e) => {
+                error!(
+                    "Mining Thread #{}: error computing difficulty target: {}",
+                    id, e
+                );
+                continue 'main;
+            }
+        };
+
+        // Start solving the block
+        let mut hash = worker.get_pow_hash().unwrap();
+        let mut tries = 0usize;
+
+        while !check_difficulty_against_target(&hash, &difficulty_target) {
+            worker.increase_nonce().unwrap();
+
+            // Check if we should break for a new job
+            if tries % UPDATE_EVERY_NONCE as usize == 0 {
+                if !job_receiver.is_empty() {
+                    continue 'main;
+                }
+
+                if let Ok(instant) = JOB_ELAPSED.read() {
+                    if let Some(start) = instant.as_ref() {
+                        let new_ts = initial_timestamp + start.elapsed().as_millis() as u64;
+                        worker.set_timestamp(new_ts).unwrap();
                     }
                 }
-                ThreadNotification::Exit => {
-                    info!("Exiting Mining Thread #{}...", id);
-                    break 'main;
-                },
-                ThreadNotification::NewJob(algorithm, mut new_job, expected_difficulty, height) => {
-                    debug!("Mining Thread #{} received a new job", id);
-                    // set thread id in extra nonce for more work spread between threads
-                    // u16 support up to 65535 threads
-                    new_job.set_thread_id_u16(id);
-                    let initial_timestamp = new_job.get_timestamp();
-                    worker.set_work(new_job, algorithm).unwrap();
 
-                    let difficulty_target = match compute_difficulty_target(&expected_difficulty) {
-                        Ok(value) => value,
-                        Err(e) => {
-                            error!("Mining Thread #{}: error on difficulty target computation: {}", id, e);
-                            continue 'main;
-                        }
-                    };
+                HASHRATE_COUNTER.fetch_add(UPDATE_EVERY_NONCE as usize, Ordering::SeqCst);
+            }
 
-                    // Solve block
-                    hash = worker.get_pow_hash().unwrap();
-                    let mut tries = 0;
-                    while !check_difficulty_against_target(&hash, &difficulty_target) {
-                        worker.increase_nonce().unwrap();
-                        // check if we have a new job pending
-                        // Only update every N iterations to avoid too much CPU usage
-                        if tries % UPDATE_EVERY_NONCE == 0 {
-                            if !job_receiver.is_empty() {
-                                continue 'main;
-                            }
-                            if let Ok(instant) = JOB_ELAPSED.read() {
-                                if let Some(instant) = instant.as_ref() {
-                                    worker.set_timestamp(initial_timestamp + instant.elapsed().as_millis() as u64).unwrap();
-                                }
-                            }
-                            HASHRATE_COUNTER.fetch_add(UPDATE_EVERY_NONCE as usize, Ordering::SeqCst);
-                        }
+            hash = worker.get_pow_hash().unwrap();
+            tries += 1;
+        }
 
-                        hash = worker.get_pow_hash().unwrap();
-                        tries += 1;
-                    }
+        // Block found 🎉
+        let block_hash = worker.get_block_hash().unwrap();
+        info!(
+            "Thread #{}: Block {} found at height {} with difficulty {}",
+            id,
+            block_hash,
+            height,
+            format_difficulty(difficulty_from_hash(&hash))
+        );
 
-                    // compute the reference hash for easier finding of the block
-                    let block_hash = worker.get_block_hash().unwrap();
-                    info!("Thread #{}: block {} found at height {} with difficulty {}", id, block_hash, height, format_difficulty(difficulty_from_hash(&hash)));
+        // Send block to communication task
+        match block_sender.blocking_send(worker.take_work().unwrap()) {
+            Ok(_) => debug!("Thread #{}: job sent to communication task", id),
+            Err(_) => error!(
+                "Thread #{}: failed to send block with hash {}",
+                id, block_hash
+            ),
+        }
+    }
+}
 
-                    let job = worker.take_work().unwrap();
-                    if let Err(_) = block_sender.blocking_send(job) {
-                        error!("Mining Thread #{}: error while sending block found with hash {}", id, block_hash);
-                        continue 'main;
-                    }
-                    debug!("Job sent to communication task");
-                }
-            };
         }
         info!("Mining Thread #{}: stopped", id);
     })?;
