@@ -696,28 +696,43 @@ async fn estimate_db_size<S: Storage>(manager: &CommandManager, _: ArgumentManag
     Ok(())
 }
 
-async fn count_orphaned_blocks<S: Storage>(manager: &CommandManager, _: ArgumentManager) -> Result<(), CommandError> {
+/// Count the number of orphaned blocks in the blockchain.
+async fn count_orphaned_blocks<S: Storage>(
+    manager: &CommandManager,
+    _: ArgumentManager,
+) -> Result<(), CommandError> {
     let context = manager.get_context().lock()?;
     let blockchain: &Arc<Blockchain<S>> = context.get()?;
     let storage = blockchain.get_storage().read().await;
-    let count = storage.count_orphaned_blocks().await.context("Error while counting orphaned blocks")?;
-    manager.message(format!("Orphaned blocks: {}", count));
 
+    let count = storage
+        .count_orphaned_blocks()
+        .await
+        .context("Error while counting orphaned blocks")?;
+
+    manager.message(format!("Orphaned blocks: {}", count));
     Ok(())
 }
 
-async fn show_json_config<S: Storage>(manager: &CommandManager, _: ArgumentManager) -> Result<(), CommandError> {
+/// Show the CLI configuration in pretty-printed JSON format.
+async fn show_json_config<S: Storage>(
+    manager: &CommandManager,
+    _: ArgumentManager,
+) -> Result<(), CommandError> {
     let context = manager.get_context().lock()?;
     let config: &CliConfig = context.get()?;
+
     let json = serde_json::to_string_pretty(config)
         .context("Error while serializing config")?;
 
+    // Send config line by line for better display handling
     for line in json.lines() {
         manager.message(line);
     }
 
     Ok(())
 }
+
 
 async fn export_json_config<S: Storage>(manager: &CommandManager, mut args: ArgumentManager) -> Result<(), CommandError> {
     let context = manager.get_context().lock()?;
