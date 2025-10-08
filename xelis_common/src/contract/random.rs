@@ -46,19 +46,34 @@ pub enum SocketMessage {
 // ========================
 
 impl Wallet {
-    // Decrypt value loaded from disk
+    /// Decrypts an encrypted value loaded from disk.
+    ///
+    /// The encrypted data must contain:
+    /// - a 24-byte nonce prefix,
+    /// - followed by the ciphertext,
+    /// - and optionally a salt prefix (which will be stripped after decryption).
+    ///
+    /// # Errors
+    /// Returns a [`WalletError::InvalidEncryptedValue`] if the data is too short,
+    /// or a [`WalletError::CryptoError`] if decryption fails.
     pub fn decrypt_value(&self, encrypted: &[u8]) -> anyhow::Result<Vec<u8>> {
+        // Sanity check for minimum nonce size (24 bytes + 1 for ciphertext)
         if encrypted.len() < 25 {
             return Err(WalletError::InvalidEncryptedValue.into());
         }
 
-        let nonce = XNonce::from_slice(&encrypted[0..24]);
-        let mut decrypted = self.cipher
-            .decrypt(nonce, &encrypted[nonce.len()..])
+        // Extract nonce (XChaCha20Poly1305 standard 24 bytes)
+        let nonce = XNonce::from_slice(&encrypted[..24]);
+
+        // Attempt decryption
+        let mut decrypted = self
+            .cipher
+            .decrypt(nonce, &encrypted[24..])
             .map_err(WalletError::CryptoError)?;
 
+        // Remove salt if present
         if let Some(salt) = &self.salt {
-            decrypted.drain(0..salt.len());
+            decrypted.drain(..salt.len());
         }
 
         Ok(decrypted)
