@@ -170,39 +170,67 @@ impl FeeHelper for TransactionBuilderState {
 }
 
 impl AccountState for TransactionBuilderState {
+    /// Returns whether this account state belongs to the mainnet.
     fn is_mainnet(&self) -> bool {
         self.mainnet
     }
 
+    /// Returns a clone of the account’s reference (hash + topoheight).
     fn get_reference(&self) -> Reference {
         self.reference.clone()
     }
 
+    /// Retrieves the account’s plaintext balance for a given asset.
+    ///
+    /// # Errors
+    /// Returns [`WalletError::BalanceNotFound`] if the asset is not tracked in this account state.
     fn get_account_balance(&self, asset: &Hash) -> Result<u64, Self::Error> {
-        self.balances.get(asset).map(|b| b.amount).ok_or_else(|| WalletError::BalanceNotFound(asset.clone()))
+        self.balances
+            .get(asset)
+            .map(|b| b.amount)
+            .ok_or_else(|| WalletError::BalanceNotFound(asset.clone()))
     }
 
+    /// Retrieves the encrypted balance (ciphertext) for a given asset.
+    ///
+    /// # Errors
+    /// Returns [`WalletError::BalanceNotFound`] if the asset is missing.
     fn get_account_ciphertext(&self, asset: &Hash) -> Result<CiphertextCache, Self::Error> {
-        self.balances.get(asset).map(|b| b.ciphertext.clone()).ok_or_else(|| WalletError::BalanceNotFound(asset.clone()))
+        self.balances
+            .get(asset)
+            .map(|b| b.ciphertext.clone())
+            .ok_or_else(|| WalletError::BalanceNotFound(asset.clone()))
     }
 
-    fn update_account_balance(&mut self, asset: &Hash, new_balance: u64, ciphertext: Ciphertext) -> Result<(), Self::Error> {
-        self.balances.insert(asset.clone(), Balance {
-            amount: new_balance,
-            ciphertext: CiphertextCache::Decompressed(ciphertext)
-        });
+    /// Updates the account’s balance and ciphertext for a specific asset.
+    fn update_account_balance(
+        &mut self,
+        asset: &Hash,
+        new_balance: u64,
+        ciphertext: Ciphertext,
+    ) -> Result<(), Self::Error> {
+        self.balances.insert(
+            asset.clone(),
+            Balance {
+                amount: new_balance,
+                ciphertext: CiphertextCache::Decompressed(ciphertext),
+            },
+        );
         Ok(())
     }
 
+    /// Returns the account’s current nonce.
     fn get_nonce(&self) -> Result<u64, Self::Error> {
         Ok(self.nonce)
     }
 
+    /// Updates the nonce value in the account state.
     fn update_nonce(&mut self, new_nonce: u64) -> Result<(), Self::Error> {
         self.nonce = new_nonce;
         Ok(())
     }
 }
+
 
 impl AsMut<EstimateFeesState> for TransactionBuilderState {
     fn as_mut(&mut self) -> &mut EstimateFeesState {
